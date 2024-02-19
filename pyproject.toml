@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dclex"
+version = "0.0.4"
+description = "DCLEX python library"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = ["web3", "siwe", "requests"]
+
+[tool.setuptools.package-data]
+dclex = ["resources/*.json"]
