@@ -41,7 +41,7 @@ class OrderStatus(Enum):
     CANCELED = "CANCELED"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Transfer:
     transaction_id: str
     amount: Decimal
@@ -50,20 +50,20 @@ class Transfer:
     status: TransferHistoryStatus
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class DigitalIdentitySignature:
     signature: str
     nonce: str
     nationality: str
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class DepositStocksSignature:
     signature: str
     nonce: str
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Order:
     id: int
     order_side: OrderSide
@@ -75,7 +75,7 @@ class Order:
     date_of_cancellation: Optional[date]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Position:
     symbol: str
     name: str
@@ -90,7 +90,7 @@ class Position:
     multiplier_denominator: int
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Portfolio:
     available: Decimal
     equity: Decimal
@@ -100,7 +100,7 @@ class Portfolio:
     positions: list[Position]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ClaimableWithdrawal:
     withdrawal_id: int
     amount: Decimal
