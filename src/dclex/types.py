@@ -76,7 +76,7 @@ class Order:
 
 
 @dataclass(frozen=True, slots=True)
-class PortfolioStockItem:
+class Position:
     symbol: str
     name: str
     total_owned: Decimal
@@ -97,7 +97,7 @@ class Portfolio:
     funds: Decimal
     profit_loss: Decimal
     total_value: Decimal
-    stocks: list[PortfolioStockItem]
+    positions: list[Position]
 
 
 @dataclass(frozen=True, slots=True)

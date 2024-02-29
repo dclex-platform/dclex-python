@@ -14,7 +14,7 @@ from dclex.types import (
     OrderSide,
     OrderStatus,
     Portfolio,
-    PortfolioStockItem,
+    Position,
     TransactionType,
     Transfer,
     TransferHistoryStatus,
@@ -185,15 +185,15 @@ class DclexClient:
     def portfolio(self) -> Portfolio:
         response = self._authorized_get("/portfolio/")
         balance = response["balance"]
-        stocks = response["stocks"]
+        positions = response["stocks"]
         return Portfolio(
             available=Decimal(balance["available"]),
             equity=Decimal(balance["equity"]),
             funds=Decimal(balance["funds"]),
             profit_loss=Decimal(balance["profitLoss"]),
             total_value=Decimal(balance["totalValue"]),
-            stocks=[
-                PortfolioStockItem(
+            positions=[
+                Position(
                     symbol=stock["symbol"],
                     name=stock["name"],
                     total_owned=Decimal(stock["totalOwned"]),
@@ -206,7 +206,7 @@ class DclexClient:
                     multiplier_numerator=stock["multiplierNumerator"],
                     multiplier_denominator=stock["multiplierDenominator"],
                 )
-                for stock in stocks
+                for stock in positions
             ],
         )
 
