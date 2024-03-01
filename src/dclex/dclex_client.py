@@ -1,8 +1,10 @@
-from datetime import date
+import json
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
 import requests
+from sseclient import SSEClient
 
 from dclex.settings import DCLEX_BASE_URL
 from dclex.types import (
@@ -15,6 +17,8 @@ from dclex.types import (
     OrderStatus,
     Portfolio,
     Position,
+    Price,
+    Stock,
     TransactionType,
     Transfer,
     TransferHistoryStatus,
@@ -255,6 +259,48 @@ class DclexClient:
             },
         )
         return response["orderId"]
+
+    def stocks(self) -> dict[str, Stock]:
+        response = requests.get(f"{DCLEX_BASE_URL}/stocks/", {"size": 100})
+        response.raise_for_status()
+        stocks_data = response.json()["items"]
+        return {
+            stock["symbol"]: Stock(
+                symbol=stock["symbol"],
+                name=stock["name"],
+                cusip=stock["cusipId"],
+                contract_address=stock["smartContractAddress"],
+                number_of_tokens_in_circulation=Decimal(stock["numberOfTokens"]),
+            )
+            for stock in stocks_data
+        }
+
+    def market_prices(self):
+        response = self._authorized_get("/stocks-prices/", {"size": 100})
+        prices_data = response["items"]
+        return {
+            stock["symbol"]: Price(
+                symbol=stock["symbol"],
+                last_price=Decimal(stock["price"]["price"]),
+                timestamp=self._parse_timestamp(stock["price"]["timestamp"]),
+                percentage_change=Decimal(stock["price"]["percentageChange"]),
+            )
+            for stock in prices_data
+        }
+
+    def prices_stream(self):
+        for sse_message in SSEClient(f"{DCLEX_BASE_URL}/prices-stream/"):
+            price_data = json.loads(sse_message.data)
+            yield Price(
+                symbol=price_data["symbol"],
+                last_price=Decimal(price_data["price"]),
+                timestamp=self._parse_timestamp(price_data["timestamp"]),
+                percentage_change=Decimal(price_data["percentageChange"]),
+            )
+
+    @staticmethod
+    def _parse_timestamp(timestamp: str) -> datetime:
+        return datetime.fromisoformat(timestamp).replace(tzinfo=timezone.utc)
 
     def _authorized_post(self, endpoint: str, request_data: dict) -> dict:
         response = requests.post(

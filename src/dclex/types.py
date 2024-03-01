@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Optional
@@ -105,3 +105,20 @@ class ClaimableWithdrawal:
     withdrawal_id: int
     amount: Decimal
     asset_type: str
+
+
+@dataclass(frozen=True)
+class Stock:
+    symbol: str
+    name: str
+    cusip: str
+    contract_address: str
+    number_of_tokens_in_circulation: Decimal
+
+
+@dataclass(frozen=True)
+class Price:
+    symbol: str
+    last_price: Decimal
+    timestamp: datetime
+    percentage_change: Decimal

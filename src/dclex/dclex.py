@@ -24,7 +24,15 @@ from dclex.settings import (
     VAULT_CONTRACT_ABI,
     VAULT_CONTRACT_ADDRESS,
 )
-from dclex.types import AccountStatus, ClaimableWithdrawal, Order, OrderSide, Portfolio, Transfer
+from dclex.types import (
+    AccountStatus,
+    ClaimableWithdrawal,
+    Order,
+    OrderSide,
+    Portfolio,
+    Stock,
+    Transfer,
+)
 
 
 class Dclex:
@@ -95,7 +103,7 @@ class Dclex:
         )
         return self._build_and_send_transaction(
             usdc_contract.functions.transfer(
-                VAULT_CONTRACT_ADDRESS, int(amount * Decimal(10**6))
+                VAULT_CONTRACT_ADDRESS, int(amount * Decimal(10 ** 6))
             )
         )
 
@@ -115,7 +123,7 @@ class Dclex:
                     "token": USDC_CONTRACT_ADDRESS,
                     "account": VAULT_CONTRACT_ADDRESS,
                     "to": self._account.address,
-                    "amount": int(amount * Decimal(10**6)),
+                    "amount": int(amount * Decimal(10 ** 6)),
                     "nonce": withdrawal_id,
                 },
                 bytes.fromhex(signature),
@@ -138,7 +146,7 @@ class Dclex:
             factory_contract.functions.burnStocks(
                 {
                     "symbol": stock_symbol,
-                    "amount": int(amount * Decimal(10**18)),
+                    "amount": int(amount * Decimal(10 ** 18)),
                     "account": self._account.address,
                     "nonce": int.from_bytes(bytes.fromhex(signature.nonce[2:]), "big"),
                 },
@@ -165,7 +173,7 @@ class Dclex:
             factory_contract.functions.mintStocks(
                 {
                     "symbol": stock_symbol,
-                    "amount": int(amount * Decimal(10**18)),
+                    "amount": int(amount * Decimal(10 ** 18)),
                     "account": self._account.address,
                     "nonce": withdrawal_id,
                 },
@@ -186,13 +194,13 @@ class Dclex:
         return self._dclex_client.portfolio().funds
 
     def get_stock_available_balance(self, symbol: str) -> Decimal:
-        for stock_item in self._dclex_client.portfolio().stocks:
+        for stock_item in self._dclex_client.portfolio().positions:
             if stock_item.symbol == symbol:
                 return stock_item.total_owned
         return Decimal(0)
 
     def get_stock_ledger_balance(self, symbol: str) -> Decimal:
-        for stock_item in self._dclex_client.portfolio().stocks:
+        for stock_item in self._dclex_client.portfolio().positions:
             if stock_item.symbol == symbol:
                 return stock_item.available_to_sell
         return Decimal(0)
@@ -233,6 +241,15 @@ class Dclex:
 
     def closed_orders(self) -> list[Order]:
         return self._dclex_client.closed_orders()
+
+    def stocks(self) -> dict[str, Stock]:
+        return self._dclex_client.stocks()
+
+    def market_prices(self):
+        return self._dclex_client.market_prices()
+
+    def prices_stream(self):
+        return self._dclex_client.prices_stream()
 
     def _build_and_send_transaction(self, contract_function: ContractFunction) -> str:
         transaction = contract_function.build_transaction(

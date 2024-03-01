@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from time import sleep
 from unittest.mock import ANY
@@ -31,9 +31,7 @@ def test_account_private_key(pytestconfig):
 
 
 def _wait_for_transaction(tx_hash: HexStr, provider_url: str) -> None:
-    Web3(Web3.HTTPProvider(provider_url)).eth.wait_for_transaction_receipt(
-        tx_hash
-    )
+    Web3(Web3.HTTPProvider(provider_url)).eth.wait_for_transaction_receipt(tx_hash)
 
 
 @pytest.fixture(name="dclex")
@@ -399,5 +397,42 @@ def test_should_get_portfolio(dclex):
         funds=ANY,
         profit_loss=ANY,
         total_value=ANY,
-        stocks=ANY,
+        positions=ANY,
     )
+
+
+def test_stocks_returns_dictionary_of_available_stocks(dclex):
+    dclex.login()
+
+    stocks = dclex.stocks()
+
+    apple_stock = stocks["AAPL"]
+    assert apple_stock.symbol == "AAPL"
+    assert apple_stock.name == "Apple Inc"
+    assert apple_stock.cusip == "037833100"
+    assert apple_stock.contract_address == "0x642E483D383da06Bc419Bd9de2D2Bf9167Ad3e4e"
+    assert apple_stock.number_of_tokens_in_circulation == Decimal(0)
+
+
+def test_market_prices_returns_dictionary_of_current_market_prices(dclex):
+    dclex.login()
+
+    prices = dclex.market_prices()
+
+    apple_price = prices["AAPL"]
+    assert apple_price.symbol == "AAPL"
+    assert isinstance(apple_price.last_price, Decimal)
+    assert apple_price.last_price > 0
+    assert isinstance(apple_price.timestamp, datetime)
+    assert isinstance(apple_price.percentage_change, Decimal)
+
+
+def test_prices_stream(dclex):
+    prices_stream = dclex.prices_stream()
+
+    price = next(prices_stream)
+    assert isinstance(price.symbol, str)
+    assert isinstance(price.last_price, Decimal)
+    assert price.last_price > 0
+    assert isinstance(price.timestamp, datetime)
+    assert isinstance(price.percentage_change, Decimal)
