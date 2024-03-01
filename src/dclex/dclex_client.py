@@ -29,6 +29,11 @@ class NotLoggedIn(Exception):
     pass
 
 
+class APIError(Exception):
+    def __init__(self, error_code: str):
+        self.error_code = error_code
+
+
 class UserSignedMessageVerificationError(Exception):
     pass
 
@@ -310,6 +315,9 @@ class DclexClient:
         )
         if response.status_code == 401:
             raise NotLoggedIn()
+        if response.status_code == 400:
+            error_code = response.json()["errorCode"]
+            raise APIError(error_code)
         response.raise_for_status()
         if response.status_code == 204:
             return {}

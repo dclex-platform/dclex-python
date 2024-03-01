@@ -1,3 +1,4 @@
+import math
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from time import sleep
@@ -7,7 +8,7 @@ import pytest
 from eth_typing.encoding import HexStr
 from web3 import Web3
 
-from dclex.dclex import AccountStatus, Dclex
+from dclex.dclex import AccountStatus, Dclex, NotEnoughFunds
 from dclex.types import (
     ClaimableWithdrawal,
     Order,
@@ -72,6 +73,14 @@ def test_deposit_and_withdraw_usdc(dclex, provider_url):
     assert dclex.get_usdc_available_balance() == usdc_available_balance_before
 
 
+def test_withdraw_usdc_raises_when_not_enough_funds(dclex, provider_url):
+    dclex.login()
+    usdc_available_balance = dclex.get_usdc_available_balance()
+
+    with pytest.raises(NotEnoughFunds):
+        dclex.withdraw_usdc(Decimal(usdc_available_balance + 1))
+
+
 def test_withdraw_and_deposit_stock(dclex, provider_url):
     dclex.login()
 
@@ -100,6 +109,14 @@ def test_withdraw_and_deposit_stock(dclex, provider_url):
 
     assert dclex.get_stock_available_balance("AAPL") == aapl_available_balance_before
     assert dclex.get_stock_ledger_balance("AAPL") == aapl_ledger_balance_before
+
+
+def test_withdraw_stock_raises_when_not_enough_funds(dclex, provider_url):
+    dclex.login()
+    available_balance = dclex.get_stock_available_balance("AAPL")
+
+    with pytest.raises(NotEnoughFunds):
+        dclex.withdraw_stock_token("AAPL", Decimal(available_balance + 1))
 
 
 def test_should_claim_digital_identity(dclex, provider_url):
@@ -139,6 +156,18 @@ def test_create_buy_and_sell_limit_order(dclex, provider_url):
     assert dclex.get_stock_ledger_balance("AAPL") == aapl_ledger_balance_before
 
 
+def test_create_buy_and_sell_limit_order_raises_when_not_enough_funds_for_order(
+    dclex, provider_url
+):
+    dclex.login()
+    price = dclex.market_prices()["AAPL"].last_price
+    usdc_available_balance = dclex.get_usdc_available_balance()
+    stocks_quantity = math.ceil(usdc_available_balance / price) + 1
+
+    with pytest.raises(NotEnoughFunds):
+        dclex.create_limit_order(OrderSide.BUY, "AAPL", stocks_quantity, price)
+
+
 def test_create_sell_market_order(dclex, provider_url):
     dclex.login()
 
@@ -161,6 +190,16 @@ def test_create_sell_market_order(dclex, provider_url):
 
     assert dclex.get_stock_available_balance("AAPL") == aapl_available_balance_before
     assert dclex.get_stock_ledger_balance("AAPL") == aapl_ledger_balance_before
+
+
+def test_create_sell_market_order_raises_when_not_enough_funds_for_order(
+    dclex, provider_url
+):
+    dclex.login()
+    available_balance = dclex.get_stock_available_balance("AAPL")
+
+    with pytest.raises(NotEnoughFunds):
+        dclex.create_sell_market_order("AAPL", available_balance + 1)
 
 
 def test_cancelling_orders(dclex, provider_url):

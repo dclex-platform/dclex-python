@@ -7,7 +7,7 @@ from siwe import SiweMessage
 from web3 import Web3
 from web3.contract.contract import ContractFunction
 
-from dclex.dclex_client import DclexClient, NotLoggedIn
+from dclex.dclex_client import APIError, DclexClient, NotLoggedIn
 from dclex.settings import (
     BLOCKCHAIN_FALSE_VALUE,
     CHAIN_ID,
@@ -33,6 +33,10 @@ from dclex.types import (
     Stock,
     Transfer,
 )
+
+
+class NotEnoughFunds(Exception):
+    pass
 
 
 class Dclex:
@@ -108,7 +112,11 @@ class Dclex:
         )
 
     def withdraw_usdc(self, amount: Decimal) -> str:
-        withdrawal_id = self._dclex_client.initialize_usdc_withdrawal(amount=amount)
+        try:
+            withdrawal_id = self._dclex_client.initialize_usdc_withdrawal(amount=amount)
+        except APIError as exc:
+            if exc.error_code == "INSUFFICIENT_FUNDS":
+                raise NotEnoughFunds()
         signature = self._dclex_client.get_withdraw_signature(
             withdrawal_id=withdrawal_id,
         )
@@ -155,10 +163,14 @@ class Dclex:
         )
 
     def withdraw_stock_token(self, stock_symbol: str, amount: int) -> str:
-        withdrawal_id = self._dclex_client.initialize_stock_withdrawal(
-            amount=amount,
-            asset_type=stock_symbol,
-        )
+        try:
+            withdrawal_id = self._dclex_client.initialize_stock_withdrawal(
+                amount=amount,
+                asset_type=stock_symbol,
+            )
+        except APIError as exc:
+            if exc.error_code == "INSUFFICIENT_FUNDS":
+                raise NotEnoughFunds()
         signature = self._dclex_client.get_withdraw_signature(
             withdrawal_id=withdrawal_id,
         )
@@ -219,19 +231,27 @@ class Dclex:
         price_limit: Decimal,
         date_of_cancellation: Optional[date] = None,
     ) -> int:
-        return self._dclex_client.create_limit_order(
-            amount=amount,
-            asset_type=stock_symbol,
-            order_side=side,
-            price_limit=price_limit,
-            date_of_cancellation=date_of_cancellation,
-        )
+        try:
+            return self._dclex_client.create_limit_order(
+                amount=amount,
+                asset_type=stock_symbol,
+                order_side=side,
+                price_limit=price_limit,
+                date_of_cancellation=date_of_cancellation,
+            )
+        except APIError as exc:
+            if exc.error_code == "INSUFFICIENT_FUNDS":
+                raise NotEnoughFunds()
 
     def create_sell_market_order(self, stock_symbol: str, amount: int) -> int:
-        return self._dclex_client.create_sell_market_order(
-            amount=amount,
-            asset_type=stock_symbol,
-        )
+        try:
+            return self._dclex_client.create_sell_market_order(
+                amount=amount,
+                asset_type=stock_symbol,
+            )
+        except APIError as exc:
+            if exc.error_code == "INSUFFICIENT_FUNDS":
+                raise NotEnoughFunds()
 
     def cancel_order(self, order_id: int) -> None:
         return self._dclex_client.cancel_order(order_id)
