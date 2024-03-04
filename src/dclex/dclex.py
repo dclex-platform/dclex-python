@@ -7,11 +7,10 @@ from siwe import SiweMessage
 from web3 import Web3
 from web3.contract.contract import ContractFunction
 
-from dclex.dclex_client import APIError, DclexClient, NotLoggedIn
+from dclex.dclex_client import APIError, AuthorizationError, DclexClient, NotLoggedIn
 from dclex.settings import (
     BLOCKCHAIN_FALSE_VALUE,
     CHAIN_ID,
-    DCLEX_BASE_URL,
     DIGITAL_IDENTITY_CONTRACT_ABI,
     DIGITAL_IDENTITY_CONTRACT_ADDRESS,
     FACTORY_CONTRACT_ABI,
@@ -39,6 +38,14 @@ class NotEnoughFunds(Exception):
     pass
 
 
+class AccountNotVerified(Exception):
+    pass
+
+
+class DigitalIdentityAlreadyClaimed(Exception):
+    pass
+
+
 class Dclex:
     def __init__(self, private_key: str, web3_provider_url: str) -> None:
         self._account = Web3().eth.account.from_key(private_key)
@@ -47,6 +54,7 @@ class Dclex:
 
     def login(self) -> None:
         nonce = self._dclex_client.get_nonce()
+        issued_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         message = SiweMessage(
             {
                 "domain": SIWE_DOMAIN,
@@ -56,9 +64,7 @@ class Dclex:
                 "version": "1",
                 "chain_id": CHAIN_ID,
                 "nonce": nonce,
-                "issued_at": datetime.now(timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
+                "issued_at": issued_at,
             }
         ).prepare_message()
         signature = self._account.sign_message(
@@ -77,6 +83,12 @@ class Dclex:
         self._dclex_client.logout()
 
     def claim_digital_identity(self) -> str:
+        account_status = self._dclex_client.get_account_status()
+        if account_status == AccountStatus.DID_MINTED:
+            raise DigitalIdentityAlreadyClaimed()
+        if account_status != AccountStatus.VERIFIED:
+            raise AccountNotVerified()
+
         signature = self._dclex_client.create_digital_identity_signature()
 
         digital_identity_contract_address = self._web3.to_checksum_address(
@@ -101,17 +113,25 @@ class Dclex:
         return self._dclex_client.get_account_status()
 
     def deposit_usdc(self, amount: Decimal) -> str:
+        account_status = self._dclex_client.get_account_status()
+        if account_status not in [AccountStatus.VERIFIED, AccountStatus.DID_MINTED]:
+            raise AccountNotVerified()
+
         usdc_contract_address = self._web3.to_checksum_address(USDC_CONTRACT_ADDRESS)
         usdc_contract = self._web3.eth.contract(
             address=usdc_contract_address, abi=USDC_CONTRACT_ABI
         )
         return self._build_and_send_transaction(
             usdc_contract.functions.transfer(
-                VAULT_CONTRACT_ADDRESS, int(amount * Decimal(10 ** 6))
+                VAULT_CONTRACT_ADDRESS, int(amount * Decimal(10**6))
             )
         )
 
     def withdraw_usdc(self, amount: Decimal) -> str:
+        account_status = self._dclex_client.get_account_status()
+        if account_status not in [AccountStatus.VERIFIED, AccountStatus.DID_MINTED]:
+            raise AccountNotVerified()
+
         try:
             withdrawal_id = self._dclex_client.initialize_usdc_withdrawal(amount=amount)
         except APIError as exc:
@@ -131,7 +151,7 @@ class Dclex:
                     "token": USDC_CONTRACT_ADDRESS,
                     "account": VAULT_CONTRACT_ADDRESS,
                     "to": self._account.address,
-                    "amount": int(amount * Decimal(10 ** 6)),
+                    "amount": int(amount * Decimal(10**6)),
                     "nonce": withdrawal_id,
                 },
                 bytes.fromhex(signature),
@@ -139,6 +159,10 @@ class Dclex:
         )
 
     def deposit_stock_token(self, stock_symbol: str, amount: int) -> str:
+        account_status = self._dclex_client.get_account_status()
+        if account_status != AccountStatus.DID_MINTED:
+            raise AccountNotVerified()
+
         signature = self._dclex_client.get_deposit_stocks_signature(
             amount=amount,
             symbol=stock_symbol,
@@ -154,7 +178,7 @@ class Dclex:
             factory_contract.functions.burnStocks(
                 {
                     "symbol": stock_symbol,
-                    "amount": int(amount * Decimal(10 ** 18)),
+                    "amount": int(amount * Decimal(10**18)),
                     "account": self._account.address,
                     "nonce": int.from_bytes(bytes.fromhex(signature.nonce[2:]), "big"),
                 },
@@ -163,6 +187,10 @@ class Dclex:
         )
 
     def withdraw_stock_token(self, stock_symbol: str, amount: int) -> str:
+        account_status = self._dclex_client.get_account_status()
+        if account_status != AccountStatus.DID_MINTED:
+            raise AccountNotVerified()
+
         try:
             withdrawal_id = self._dclex_client.initialize_stock_withdrawal(
                 amount=amount,
@@ -185,7 +213,7 @@ class Dclex:
             factory_contract.functions.mintStocks(
                 {
                     "symbol": stock_symbol,
-                    "amount": int(amount * Decimal(10 ** 18)),
+                    "amount": int(amount * Decimal(10**18)),
                     "account": self._account.address,
                     "nonce": withdrawal_id,
                 },
@@ -218,7 +246,12 @@ class Dclex:
         return Decimal(0)
 
     def portfolio(self) -> Portfolio:
-        return self._dclex_client.portfolio()
+        try:
+            return self._dclex_client.portfolio()
+        except APIError as exc:
+            if exc.error_code == "ACCOUNT_NOT_FOUND":
+                raise AccountNotVerified()
+            raise
 
     def claimable_withdrawals(self) -> list[ClaimableWithdrawal]:
         return self._dclex_client.claimable_withdrawals()
@@ -242,6 +275,7 @@ class Dclex:
         except APIError as exc:
             if exc.error_code == "INSUFFICIENT_FUNDS":
                 raise NotEnoughFunds()
+            raise
 
     def create_sell_market_order(self, stock_symbol: str, amount: int) -> int:
         try:
@@ -252,6 +286,7 @@ class Dclex:
         except APIError as exc:
             if exc.error_code == "INSUFFICIENT_FUNDS":
                 raise NotEnoughFunds()
+            raise
 
     def cancel_order(self, order_id: int) -> None:
         return self._dclex_client.cancel_order(order_id)
@@ -266,7 +301,10 @@ class Dclex:
         return self._dclex_client.stocks()
 
     def market_prices(self):
-        return self._dclex_client.market_prices()
+        try:
+            return self._dclex_client.market_prices()
+        except AuthorizationError:
+            raise AccountNotVerified()
 
     def prices_stream(self):
         return self._dclex_client.prices_stream()

@@ -29,6 +29,10 @@ class NotLoggedIn(Exception):
     pass
 
 
+class AuthorizationError(Exception):
+    pass
+
+
 class APIError(Exception):
     def __init__(self, error_code: str):
         self.error_code = error_code
@@ -313,11 +317,13 @@ class DclexClient:
             headers={"Authorization": f"Token {self._token}"},
             json=request_data,
         )
-        if response.status_code == 401:
-            raise NotLoggedIn()
         if response.status_code == 400:
             error_code = response.json()["errorCode"]
             raise APIError(error_code)
+        elif response.status_code == 401:
+            raise NotLoggedIn()
+        elif response.status_code == 403:
+            raise AuthorizationError()
         response.raise_for_status()
         if response.status_code == 204:
             return {}
@@ -331,8 +337,13 @@ class DclexClient:
             headers={"Authorization": f"Token {self._token}"},
             params=params,
         )
-        if response.status_code == 401:
+        if response.status_code == 400:
+            error_code = response.json()["errorCode"]
+            raise APIError(error_code)
+        elif response.status_code == 401:
             raise NotLoggedIn()
+        elif response.status_code == 403:
+            raise AuthorizationError()
         response.raise_for_status()
         return response.json()
 
