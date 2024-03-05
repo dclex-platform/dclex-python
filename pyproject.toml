@@ -4,13 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dclex"
-version = "0.0.4"
+version = "0.0.5"
 description = "DCLEX python library"
 readme = "README.md"
 requires-python = ">=3.7"
 license = {file = "LICENSE"}
 classifiers = [
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 dependencies = ["web3==6.15.0", "siwe==2.4.1", "requests==2.31.0", "sseclient==0.0.27"]
 
