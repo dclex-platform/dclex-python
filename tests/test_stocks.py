@@ -39,6 +39,8 @@ def test_market_prices_raises_when_user_is_not_verified(dclex_unverified):
 
 
 def test_prices_stream(dclex):
+    dclex.login()
+
     prices_stream = dclex.prices_stream()
 
     price = next(prices_stream)

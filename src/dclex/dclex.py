@@ -307,7 +307,8 @@ class Dclex:
             raise AccountNotVerified()
 
     def prices_stream(self):
-        return self._dclex_client.prices_stream()
+        prices_stream_access_token = self._dclex_client.prices_stream_access_token()
+        return self._dclex_client.prices_stream(prices_stream_access_token)
 
     def _build_and_send_transaction(self, contract_function: ContractFunction) -> str:
         transaction = contract_function.build_transaction(
