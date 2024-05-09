@@ -302,7 +302,10 @@ class DclexClient:
         return response["pricesStreamAccessToken"]
 
     def prices_stream(self, prices_stream_access_token: str):
-        for sse_message in SSEClient(f"{DCLEX_BASE_URL}/prices-stream/", params={"token": prices_stream_access_token}):
+        for sse_message in SSEClient(
+            f"{DCLEX_BASE_URL}/prices-stream/",
+            params={"token": prices_stream_access_token},
+        ):
             price_data = json.loads(sse_message.data)
             yield Price(
                 symbol=price_data["symbol"],

@@ -24,13 +24,14 @@ def test_deposit_and_withdraw_usdc(dclex, provider_url):
     assert dclex.get_usdc_ledger_balance() - usdc_ledger_balance_before == 100
     assert dclex.get_usdc_available_balance() - usdc_available_balance_before == 100
 
-    tx_hash = dclex.withdraw_usdc(Decimal(100))
+    withdrawal_id = dclex.initialize_usdc_withdrawal(Decimal(100))
+    tx_hash = dclex.finalize_usdc_withdrawal(withdrawal_id, Decimal(100))
     wait_for_transaction(tx_hash, provider_url)
 
-    sleep(3)
+    sleep(15)
 
-    assert dclex.get_usdc_ledger_balance() == usdc_ledger_balance_before
-    assert dclex.get_usdc_available_balance() == usdc_available_balance_before
+    assert dclex.get_usdc_ledger_balance() == usdc_ledger_balance_before - 100
+    assert dclex.get_usdc_available_balance() == usdc_available_balance_before - 100
 
 
 def test_deposit_usdc_raises_when_user_is_not_verified(dclex_unverified):
@@ -39,18 +40,18 @@ def test_deposit_usdc_raises_when_user_is_not_verified(dclex_unverified):
         dclex_unverified.deposit_usdc(Decimal(100))
 
 
-def test_withdraw_usdc_raises_when_user_is_not_verified(dclex_unverified):
+def test_initialize_usdc_withdrawal_raises_when_user_is_not_verified(dclex_unverified):
     dclex_unverified.login()
     with pytest.raises(AccountNotVerified):
-        dclex_unverified.withdraw_usdc(Decimal(100))
+        dclex_unverified.initialize_usdc_withdrawal(Decimal(100))
 
 
-def test_withdraw_usdc_raises_when_not_enough_funds(dclex, provider_url):
+def test_initialize_usdc_withdrawal_raises_when_not_enough_funds(dclex, provider_url):
     dclex.login()
     usdc_available_balance = dclex.get_usdc_available_balance()
 
     with pytest.raises(NotEnoughFunds):
-        dclex.withdraw_usdc(Decimal(usdc_available_balance + 1))
+        dclex.initialize_usdc_withdrawal(Decimal(usdc_available_balance + 1))
 
 
 def test_withdraw_and_deposit_stock(dclex, provider_url):
@@ -66,9 +67,10 @@ def test_withdraw_and_deposit_stock(dclex, provider_url):
     aapl_available_balance_before = dclex.get_stock_available_balance("AAPL")
     aapl_ledger_balance_before = dclex.get_stock_ledger_balance("AAPL")
 
-    tx_hash = dclex.withdraw_stock_token("AAPL", 1)
+    withdrawal_id = dclex.initialize_stock_withdrawal("AAPL", 1)
+    tx_hash = dclex.finalize_stock_withdrawal(withdrawal_id, "AAPL", 1)
     wait_for_transaction(tx_hash, provider_url)
-    sleep(3)
+    sleep(20)
 
     assert (
         dclex.get_stock_available_balance("AAPL") - aapl_available_balance_before == -1
@@ -89,18 +91,18 @@ def test_deposit_stock_raises_when_user_is_not_verified(dclex_unverified):
         dclex_unverified.deposit_stock_token("AAPL", Decimal(1))
 
 
-def test_withdraw_stock_raises_when_user_is_not_verified(dclex_unverified):
+def test_initialize_stock_withdrawal_raises_when_user_is_not_verified(dclex_unverified):
     dclex_unverified.login()
     with pytest.raises(AccountNotVerified):
-        dclex_unverified.withdraw_stock_token("AAPL", Decimal(1))
+        dclex_unverified.initialize_stock_withdrawal("AAPL", Decimal(1))
 
 
-def test_withdraw_stock_raises_when_not_enough_funds(dclex, provider_url):
+def test_initialize_stock_withdrawal_raises_when_not_enough_funds(dclex, provider_url):
     dclex.login()
     available_balance = dclex.get_stock_available_balance("AAPL")
 
     with pytest.raises(NotEnoughFunds):
-        dclex.withdraw_stock_token("AAPL", Decimal(available_balance + 1))
+        dclex.initialize_stock_withdrawal("AAPL", available_balance + 1)
 
 
 def test_usdc_pending_transfers(dclex, provider_url):

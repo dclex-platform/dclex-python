@@ -127,16 +127,18 @@ class Dclex:
             )
         )
 
-    def withdraw_usdc(self, amount: Decimal) -> str:
+    def initialize_usdc_withdrawal(self, amount: Decimal):
         account_status = self._dclex_client.get_account_status()
         if account_status not in [AccountStatus.VERIFIED, AccountStatus.DID_MINTED]:
             raise AccountNotVerified()
 
         try:
-            withdrawal_id = self._dclex_client.initialize_usdc_withdrawal(amount=amount)
+            return self._dclex_client.initialize_usdc_withdrawal(amount=amount)
         except APIError as exc:
             if exc.error_code == "INSUFFICIENT_FUNDS":
                 raise NotEnoughFunds()
+
+    def finalize_usdc_withdrawal(self, withdrawal_id: int, amount: Decimal) -> str:
         signature = self._dclex_client.get_withdraw_signature(
             withdrawal_id=withdrawal_id,
         )
@@ -186,19 +188,23 @@ class Dclex:
             )
         )
 
-    def withdraw_stock_token(self, stock_symbol: str, amount: int) -> str:
+    def initialize_stock_withdrawal(self, stock_symbol: str, amount: int):
         account_status = self._dclex_client.get_account_status()
         if account_status != AccountStatus.DID_MINTED:
             raise AccountNotVerified()
 
         try:
-            withdrawal_id = self._dclex_client.initialize_stock_withdrawal(
+            return self._dclex_client.initialize_stock_withdrawal(
                 amount=amount,
                 asset_type=stock_symbol,
             )
         except APIError as exc:
             if exc.error_code == "INSUFFICIENT_FUNDS":
                 raise NotEnoughFunds()
+
+    def finalize_stock_withdrawal(
+        self, withdrawal_id: int, stock_symbol: str, amount: int
+    ) -> str:
         signature = self._dclex_client.get_withdraw_signature(
             withdrawal_id=withdrawal_id,
         )
