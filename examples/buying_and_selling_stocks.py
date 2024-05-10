@@ -22,3 +22,5 @@ dclex.cancel_order(market_sell_order_id)
 
 open_orders = dclex.open_orders()
 closed_orders = dclex.closed_orders()
+
+dclex.logout()

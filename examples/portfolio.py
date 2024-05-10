@@ -11,3 +11,5 @@ usdc_available_balance = dclex.get_usdc_available_balance()
 usdc_ledger_balance = dclex.get_usdc_ledger_balance()
 aapl_available_balance = dclex.get_stock_available_balance("AAPL")
 aapl_ledger_balance = dclex.get_stock_ledger_balance("AAPL")
+
+dclex.logout()

@@ -178,13 +178,13 @@ class DclexClient:
             nonce=response["nonce"],
         )
 
-    def initialize_usdc_withdrawal(self, amount: Decimal) -> int:
+    def request_usdc_withdrawal(self, amount: Decimal) -> int:
         response = self._authorized_post(
             "/initialize-usdc-withdraw/", {"amount": str(amount)}
         )
         return response["withdrawalId"]
 
-    def initialize_stock_withdrawal(self, amount: int, asset_type: str) -> int:
+    def request_stock_withdrawal(self, amount: int, asset_type: str) -> int:
         response = self._authorized_post(
             "/initialize-stocks-withdraw/",
             {"amount": str(amount), "assetType": asset_type},

@@ -25,3 +25,5 @@ percentage_change = aapl_price.percentage_change
 prices_stream = dclex.prices_stream()
 for price in prices_stream:
     print(price.symbol, price.last_price, price.timestamp, price.percentage_change)
+
+dclex.logout()

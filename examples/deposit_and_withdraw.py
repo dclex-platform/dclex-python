@@ -9,12 +9,14 @@ dclex = Dclex(private_key=my_private_key, web3_provider_url=web3_provider_url)
 dclex.login()
 
 deposit_usdc_tx_hash = dclex.deposit_usdc(Decimal(100))
-usdc_withdrawal_id = dclex.initialize_usdc_withdrawal(Decimal(100))
-withdraw_usdc_tx_hash = dclex.finalize_usdc_withdrawal(usdc_withdrawal_id, Decimal(100))
+usdc_withdrawal_id = dclex.request_usdc_withdrawal(Decimal(100))
+withdraw_usdc_tx_hash = dclex.claim_usdc_withdrawal(usdc_withdrawal_id, Decimal(100))
 deposit_aapl_tx_hash = dclex.deposit_stock_token("AAPL", 10)
-stock_withdrawal_id = dclex.initialize_stock_withdrawal("AAPL", 10)
-withdraw_aapl_tx_hash = dclex.finalize_stock_withdrawal(1, "AAPL", 10)
+stock_withdrawal_id = dclex.request_stock_withdrawal("AAPL", 10)
+withdraw_aapl_tx_hash = dclex.claim_stock_withdrawal(1, "AAPL", 10)
 
 pending_transfers = dclex.pending_transfers()
 closed_transfers = dclex.closed_transfers()
 claimable_withdrawals = dclex.claimable_withdrawals()
+
+dclex.logout()
