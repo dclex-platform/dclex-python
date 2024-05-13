@@ -10,10 +10,10 @@ dclex.login()
 
 deposit_usdc_tx_hash = dclex.deposit_usdc(Decimal(100))
 usdc_withdrawal_id = dclex.request_usdc_withdrawal(Decimal(100))
-withdraw_usdc_tx_hash = dclex.claim_usdc_withdrawal(usdc_withdrawal_id, Decimal(100))
+withdraw_usdc_tx_hash = dclex.claim_usdc_withdrawal(usdc_withdrawal_id)
 deposit_aapl_tx_hash = dclex.deposit_stock_token("AAPL", 10)
 stock_withdrawal_id = dclex.request_stock_withdrawal("AAPL", 10)
-withdraw_aapl_tx_hash = dclex.claim_stock_withdrawal(1, "AAPL", 10)
+withdraw_aapl_tx_hash = dclex.claim_stock_withdrawal(1)
 
 pending_transfers = dclex.pending_transfers()
 closed_transfers = dclex.closed_transfers()

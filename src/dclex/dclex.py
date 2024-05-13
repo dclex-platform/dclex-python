@@ -46,6 +46,10 @@ class DigitalIdentityAlreadyClaimed(Exception):
     pass
 
 
+class WithdrawalNotFound(Exception):
+    pass
+
+
 class Dclex:
     def __init__(self, private_key: str, web3_provider_url: str) -> None:
         self._account = Web3().eth.account.from_key(private_key)
@@ -138,7 +142,8 @@ class Dclex:
             if exc.error_code == "INSUFFICIENT_FUNDS":
                 raise NotEnoughFunds()
 
-    def claim_usdc_withdrawal(self, withdrawal_id: int, amount: Decimal) -> str:
+    def claim_usdc_withdrawal(self, withdrawal_id: int) -> str:
+        withdrawal = self._get_claimable_withdrawal(withdrawal_id)
         signature = self._dclex_client.get_withdraw_signature(
             withdrawal_id=withdrawal_id,
         )
@@ -153,7 +158,7 @@ class Dclex:
                     "token": USDC_CONTRACT_ADDRESS,
                     "account": VAULT_CONTRACT_ADDRESS,
                     "to": self._account.address,
-                    "amount": int(amount * Decimal(10**6)),
+                    "amount": int(withdrawal.amount * Decimal(10**6)),
                     "nonce": withdrawal_id,
                 },
                 bytes.fromhex(signature),
@@ -202,9 +207,8 @@ class Dclex:
             if exc.error_code == "INSUFFICIENT_FUNDS":
                 raise NotEnoughFunds()
 
-    def claim_stock_withdrawal(
-        self, withdrawal_id: int, stock_symbol: str, amount: int
-    ) -> str:
+    def claim_stock_withdrawal(self, withdrawal_id: int) -> str:
+        withdrawal = self._get_claimable_withdrawal(withdrawal_id)
         signature = self._dclex_client.get_withdraw_signature(
             withdrawal_id=withdrawal_id,
         )
@@ -218,14 +222,29 @@ class Dclex:
         return self._build_and_send_transaction(
             factory_contract.functions.mintStocks(
                 {
-                    "symbol": stock_symbol,
-                    "amount": int(amount * Decimal(10**18)),
+                    "symbol": withdrawal.asset_type,
+                    "amount": int(withdrawal.amount * Decimal(10**18)),
                     "account": self._account.address,
                     "nonce": withdrawal_id,
                 },
                 bytes.fromhex(signature),
             )
         )
+
+    def _get_claimable_withdrawal(self, withdrawal_id: int) -> ClaimableWithdrawal:
+        claimable_withdrawals = self._dclex_client.claimable_withdrawals()
+        matching_withdrawals = [
+            withdrawal
+            for withdrawal in claimable_withdrawals
+            if withdrawal.withdrawal_id == withdrawal_id
+        ]
+        if len(matching_withdrawals) == 0:
+            raise WithdrawalNotFound()
+        if len(matching_withdrawals) > 1:
+            raise RuntimeError(
+                "Received multiple claimable withdrawals with the same id"
+            )
+        return matching_withdrawals[0]
 
     def pending_transfers(self) -> list[Transfer]:
         return self._dclex_client.get_pending_transfers()
