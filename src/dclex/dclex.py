@@ -349,3 +349,6 @@ class Dclex:
         return self._web3.eth.send_raw_transaction(
             signed_transaction.rawTransaction
         ).hex()
+
+    def is_market_open(self) -> bool:
+        return self._dclex_client.is_market_open()

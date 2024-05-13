@@ -46,7 +46,8 @@ class DclexClient:
     def __init__(self) -> None:
         self._token = None
 
-    def get_nonce(self) -> str:
+    @staticmethod
+    def get_nonce() -> str:
         response = requests.get(f"{DCLEX_BASE_URL}/users/nonce/")
         response.raise_for_status()
         return response.json()["nonce"]
@@ -313,6 +314,12 @@ class DclexClient:
                 timestamp=self._parse_timestamp(price_data["timestamp"]),
                 percentage_change=Decimal(price_data["percentageChange"]),
             )
+
+    @staticmethod
+    def is_market_open() -> bool:
+        response = requests.get(f"{DCLEX_BASE_URL}/market-status/")
+        response.raise_for_status()
+        return response.json()["isMarketOpen"]
 
     @staticmethod
     def _parse_timestamp(timestamp: str) -> datetime:

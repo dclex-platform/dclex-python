@@ -183,3 +183,8 @@ def test_closed_orders(dclex, provider_url):
         status=OrderStatus.CANCELED,
         date_of_cancellation=date.today() + timedelta(days=10),
     )
+
+
+def test_is_market_open_returns_if_market_is_currently_open(dclex, provider_url):
+    result = dclex.is_market_open()
+    assert isinstance(result, bool)
