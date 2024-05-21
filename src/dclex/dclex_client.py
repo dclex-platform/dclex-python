@@ -112,7 +112,9 @@ class DclexClient:
         return items
 
     def create_digital_identity_signature(self) -> DigitalIdentitySignature:
-        response = self._authorized_post("/digital-identity-signature/", {})
+        response = self._authorized_post(
+            "/digital-identity-signature/", {"requestedFromLibrary": True}
+        )
         return DigitalIdentitySignature(
             signature=response["signature"],
             nonce=response["nonce"],
