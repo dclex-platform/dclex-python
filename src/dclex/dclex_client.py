@@ -237,7 +237,7 @@ class DclexClient:
             for item in response["items"]
         ]
 
-    def create_limit_order(
+    def send_limit_order(
         self,
         amount: int,
         asset_type: str,
@@ -258,7 +258,7 @@ class DclexClient:
         )
         return response["orderId"]
 
-    def create_sell_market_order(
+    def send_sell_market_order(
         self,
         amount: int,
         asset_type: str,

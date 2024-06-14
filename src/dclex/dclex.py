@@ -281,7 +281,7 @@ class Dclex:
     def claimable_withdrawals(self) -> list[ClaimableWithdrawal]:
         return self._dclex_client.claimable_withdrawals()
 
-    def create_limit_order(
+    def send_limit_order(
         self,
         side: OrderSide,
         stock_symbol: str,
@@ -290,7 +290,7 @@ class Dclex:
         date_of_cancellation: Optional[date] = None,
     ) -> int:
         try:
-            return self._dclex_client.create_limit_order(
+            return self._dclex_client.send_limit_order(
                 amount=amount,
                 asset_type=stock_symbol,
                 order_side=side,
@@ -302,9 +302,9 @@ class Dclex:
                 raise NotEnoughFunds()
             raise
 
-    def create_sell_market_order(self, stock_symbol: str, amount: int) -> int:
+    def send_sell_market_order(self, stock_symbol: str, amount: int) -> int:
         try:
-            return self._dclex_client.create_sell_market_order(
+            return self._dclex_client.send_sell_market_order(
                 amount=amount,
                 asset_type=stock_symbol,
             )

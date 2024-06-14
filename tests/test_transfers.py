@@ -69,7 +69,7 @@ def test_withdraw_and_deposit_stock(dclex, provider_url):
     wait_for_transaction(tx_hash, provider_url)
     sleep(3)
 
-    dclex.create_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
+    dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
     sleep(30)
 
     aapl_available_balance_before = dclex.get_stock_available_balance("AAPL")
@@ -189,7 +189,7 @@ def test_stock_token_pending_transfers(dclex, provider_url):
     dclex.login()
     wait_for_transaction(dclex.deposit_usdc(Decimal(200)), provider_url)
     sleep(2)
-    dclex.create_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
+    dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
     sleep(30)
 
     dclex.withdraw_stock_token("AAPL", 1)
@@ -211,7 +211,7 @@ def test_stock_token_closed_transfers(dclex, provider_url):
     dclex.login()
     wait_for_transaction(dclex.deposit_usdc(Decimal(200)), provider_url)
     sleep(2)
-    dclex.create_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
+    dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
     sleep(30)
 
     withdrawal_tx_hash = dclex.withdraw_stock_token("AAPL", 1)

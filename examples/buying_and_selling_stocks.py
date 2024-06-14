@@ -9,15 +9,13 @@ web3_provider_url = "https://eth-sepolia.g.alchemy.com/v2/{your_api_key}"
 dclex = Dclex(private_key=my_private_key, web3_provider_url=web3_provider_url)
 dclex.login()
 
-limit_buy_order_id = dclex.create_limit_order(
-    OrderSide.BUY, "AAPL", 5, Decimal("185.50")
-)
+limit_buy_order_id = dclex.send_limit_order(OrderSide.BUY, "AAPL", 5, Decimal("185.50"))
 cancellation_date = date.today() + timedelta(days=10)
-limit_sell_order_id = dclex.create_limit_order(
+limit_sell_order_id = dclex.send_limit_order(
     OrderSide.SELL, "AAPL", 5, Decimal("185.50"), cancellation_date
 )
 
-market_sell_order_id = dclex.create_sell_market_order("AAPL", 5)
+market_sell_order_id = dclex.send_sell_market_order("AAPL", 5)
 dclex.cancel_order(market_sell_order_id)
 
 open_orders = dclex.open_orders()
