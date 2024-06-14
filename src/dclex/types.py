@@ -92,9 +92,9 @@ class Position:
 
 @dataclass(frozen=True)
 class Portfolio:
-    available: Decimal
-    equity: Decimal
-    funds: Decimal
+    buying_power: Decimal
+    total_equity: Decimal
+    total_funds: Decimal
     profit_loss: Decimal
     total_value: Decimal
     positions: list[Position]

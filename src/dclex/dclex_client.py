@@ -203,9 +203,9 @@ class DclexClient:
         balance = response["balance"]
         positions = response["stocks"]
         return Portfolio(
-            available=Decimal(balance["available"]),
-            equity=Decimal(balance["equity"]),
-            funds=Decimal(balance["funds"]),
+            buying_power=Decimal(balance["available"]),
+            total_equity=Decimal(balance["equity"]),
+            total_funds=Decimal(balance["funds"]),
             profit_loss=Decimal(balance["profitLoss"]),
             total_value=Decimal(balance["totalValue"]),
             positions=[

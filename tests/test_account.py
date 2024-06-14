@@ -34,9 +34,9 @@ def test_should_get_portfolio(dclex):
     dclex.login()
 
     assert dclex.portfolio() == Portfolio(
-        available=ANY,
-        equity=ANY,
-        funds=ANY,
+        buying_power=ANY,
+        total_equity=ANY,
+        total_funds=ANY,
         profit_loss=ANY,
         total_value=ANY,
         positions=ANY,

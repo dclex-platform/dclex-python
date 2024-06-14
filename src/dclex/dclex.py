@@ -253,10 +253,10 @@ class Dclex:
         return self._dclex_client.get_closed_transfers()
 
     def get_usdc_available_balance(self) -> Decimal:
-        return self._dclex_client.portfolio().available
+        return self._dclex_client.portfolio().buying_power
 
     def get_usdc_ledger_balance(self) -> Decimal:
-        return self._dclex_client.portfolio().funds
+        return self._dclex_client.portfolio().total_funds
 
     def get_stock_available_balance(self, symbol: str) -> Decimal:
         for stock_item in self._dclex_client.portfolio().positions:
