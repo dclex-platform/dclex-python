@@ -14,14 +14,14 @@ def test_deposit_and_withdraw_usdc(dclex, provider_url):
     dclex.login()
 
     usdc_available_balance_before = dclex.get_usdc_available_balance()
-    usdc_ledger_balance_before = dclex.get_usdc_ledger_balance()
+    usdc_total_balance_before = dclex.get_usdc_total_balance()
 
     # tx_hash = dclex.deposit_usdc(amount=Decimal(100))
     # wait_for_transaction(tx_hash, provider_url)
 
     # sleep(3)
 
-    # assert dclex.get_usdc_ledger_balance() - usdc_ledger_balance_before == 100
+    # assert dclex.get_usdc_total_balance() - usdc_total_balance_before == 100
     # assert dclex.get_usdc_available_balance() - usdc_available_balance_before == 100
 
     withdrawal_id = dclex.request_usdc_withdrawal(Decimal(100))
@@ -30,7 +30,7 @@ def test_deposit_and_withdraw_usdc(dclex, provider_url):
 
     sleep(15)
 
-    assert dclex.get_usdc_ledger_balance() == usdc_ledger_balance_before - 100
+    assert dclex.get_usdc_total_balance() == usdc_total_balance_before - 100
     assert dclex.get_usdc_available_balance() == usdc_available_balance_before - 100
 
 
@@ -73,7 +73,7 @@ def test_withdraw_and_deposit_stock(dclex, provider_url):
     sleep(30)
 
     aapl_available_balance_before = dclex.get_stock_available_balance("AAPL")
-    aapl_ledger_balance_before = dclex.get_stock_ledger_balance("AAPL")
+    aapl_total_balance_before = dclex.get_stock_total_balance("AAPL")
 
     withdrawal_id = dclex.request_stock_withdrawal("AAPL", 1)
     tx_hash = dclex.claim_stock_withdrawal(withdrawal_id)
@@ -83,14 +83,14 @@ def test_withdraw_and_deposit_stock(dclex, provider_url):
     assert (
         dclex.get_stock_available_balance("AAPL") - aapl_available_balance_before == -1
     )
-    assert dclex.get_stock_ledger_balance("AAPL") - aapl_ledger_balance_before == -1
+    assert dclex.get_stock_total_balance("AAPL") - aapl_total_balance_before == -1
 
     tx_hash = dclex.deposit_stock_token("AAPL", 1)
     wait_for_transaction(tx_hash, provider_url)
     sleep(3)
 
     assert dclex.get_stock_available_balance("AAPL") == aapl_available_balance_before
-    assert dclex.get_stock_ledger_balance("AAPL") == aapl_ledger_balance_before
+    assert dclex.get_stock_total_balance("AAPL") == aapl_total_balance_before
 
 
 def test_deposit_stock_raises_when_user_is_not_verified(dclex_unverified):

@@ -18,7 +18,7 @@ def test_send_buy_and_sell_limit_order(dclex, provider_url):
     wait_for_transaction(tx_hash, provider_url)
 
     aapl_available_balance_before = dclex.get_stock_available_balance("AAPL")
-    aapl_ledger_balance_before = dclex.get_stock_ledger_balance("AAPL")
+    aapl_total_balance_before = dclex.get_stock_total_balance("AAPL")
 
     dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
     sleep(30)
@@ -26,7 +26,7 @@ def test_send_buy_and_sell_limit_order(dclex, provider_url):
     assert (
         dclex.get_stock_available_balance("AAPL") - aapl_available_balance_before == 1
     )
-    assert dclex.get_stock_ledger_balance("AAPL") - aapl_ledger_balance_before == 1
+    assert dclex.get_stock_total_balance("AAPL") - aapl_total_balance_before == 1
 
     dclex.send_limit_order(
         OrderSide.SELL, "AAPL", 1, Decimal(190), date.today() + timedelta(days=10)
@@ -34,7 +34,7 @@ def test_send_buy_and_sell_limit_order(dclex, provider_url):
     sleep(30)
 
     assert dclex.get_stock_available_balance("AAPL") == aapl_available_balance_before
-    assert dclex.get_stock_ledger_balance("AAPL") == aapl_ledger_balance_before
+    assert dclex.get_stock_total_balance("AAPL") == aapl_total_balance_before
 
 
 def test_send_buy_and_sell_limit_order_raises_when_not_enough_funds_for_order(dclex):
@@ -54,7 +54,7 @@ def test_send_sell_market_order(dclex, provider_url):
     wait_for_transaction(tx_hash, provider_url)
 
     aapl_available_balance_before = dclex.get_stock_available_balance("AAPL")
-    aapl_ledger_balance_before = dclex.get_stock_ledger_balance("AAPL")
+    aapl_total_balance_before = dclex.get_stock_total_balance("AAPL")
 
     dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
     sleep(30)
@@ -62,13 +62,13 @@ def test_send_sell_market_order(dclex, provider_url):
     assert (
         dclex.get_stock_available_balance("AAPL") - aapl_available_balance_before == 1
     )
-    assert dclex.get_stock_ledger_balance("AAPL") - aapl_ledger_balance_before == 1
+    assert dclex.get_stock_total_balance("AAPL") - aapl_total_balance_before == 1
 
     dclex.send_sell_market_order("AAPL", 1)
     sleep(30)
 
     assert dclex.get_stock_available_balance("AAPL") == aapl_available_balance_before
-    assert dclex.get_stock_ledger_balance("AAPL") == aapl_ledger_balance_before
+    assert dclex.get_stock_total_balance("AAPL") == aapl_total_balance_before
 
 
 def test_send_sell_market_order_raises_when_not_enough_funds_for_order(dclex):
@@ -87,18 +87,18 @@ def test_cancelling_orders(dclex, provider_url):
     sleep(3)
 
     usdc_available_balance_before = dclex.get_usdc_available_balance()
-    usdc_ledger_balance_before = dclex.get_usdc_ledger_balance()
+    usdc_total_balance_before = dclex.get_usdc_total_balance()
     aapl_available_balance_before = dclex.get_stock_available_balance("AAPL")
-    aapl_ledger_balance_before = dclex.get_stock_ledger_balance("AAPL")
+    aapl_total_balance_before = dclex.get_stock_total_balance("AAPL")
 
     order_id = dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
     dclex.cancel_order(order_id)
     sleep(30)
 
     assert dclex.get_usdc_available_balance() == usdc_available_balance_before
-    assert dclex.get_usdc_ledger_balance() == usdc_ledger_balance_before
+    assert dclex.get_usdc_total_balance() == usdc_total_balance_before
     assert dclex.get_stock_available_balance("AAPL") == aapl_available_balance_before
-    assert dclex.get_stock_ledger_balance("AAPL") == aapl_ledger_balance_before
+    assert dclex.get_stock_total_balance("AAPL") == aapl_total_balance_before
 
 
 def test_open_orders(dclex, provider_url):

@@ -8,8 +8,8 @@ dclex.login()
 
 portfolio = dclex.portfolio()
 usdc_available_balance = dclex.get_usdc_available_balance()
-usdc_ledger_balance = dclex.get_usdc_ledger_balance()
+usdc_total_balance = dclex.get_usdc_total_balance()
 aapl_available_balance = dclex.get_stock_available_balance("AAPL")
-aapl_ledger_balance = dclex.get_stock_ledger_balance("AAPL")
+aapl_total_balance = dclex.get_stock_total_balance("AAPL")
 
 dclex.logout()

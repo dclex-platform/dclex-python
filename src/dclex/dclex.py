@@ -255,7 +255,7 @@ class Dclex:
     def get_usdc_available_balance(self) -> Decimal:
         return self._dclex_client.portfolio().buying_power
 
-    def get_usdc_ledger_balance(self) -> Decimal:
+    def get_usdc_total_balance(self) -> Decimal:
         return self._dclex_client.portfolio().total_funds
 
     def get_stock_available_balance(self, symbol: str) -> Decimal:
@@ -264,7 +264,7 @@ class Dclex:
                 return stock_item.total_owned
         return Decimal(0)
 
-    def get_stock_ledger_balance(self, symbol: str) -> Decimal:
+    def get_stock_total_balance(self, symbol: str) -> Decimal:
         for stock_item in self._dclex_client.portfolio().positions:
             if stock_item.symbol == symbol:
                 return stock_item.available_to_sell
