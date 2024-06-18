@@ -7,7 +7,7 @@ from siwe import SiweMessage
 from web3 import Web3
 from web3.contract.contract import ContractFunction
 
-from dclex.dclex_client import APIError, AuthorizationError, DclexClient, NotLoggedIn
+from dclex.dclex_client import APIError, DclexClient, NotLoggedIn
 from dclex.settings import (
     BLOCKCHAIN_FALSE_VALUE,
     CHAIN_ID,
@@ -28,10 +28,10 @@ from dclex.types import (
     ClaimableWithdrawal,
     Order,
     OrderSide,
+    OrderStatus,
     Portfolio,
     Stock,
     Transfer,
-    OrderStatus,
 )
 
 
@@ -328,12 +328,6 @@ class Dclex:
 
     def stocks(self) -> dict[str, Stock]:
         return self._dclex_client.stocks()
-
-    def market_prices(self):
-        try:
-            return self._dclex_client.market_prices()
-        except AuthorizationError:
-            raise AccountNotVerified()
 
     def prices_stream(self):
         prices_stream_access_token = self._dclex_client.prices_stream_access_token()

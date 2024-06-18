@@ -40,7 +40,11 @@ def test_send_buy_and_sell_limit_order(dclex, provider_url):
 
 def test_send_buy_and_sell_limit_order_raises_when_not_enough_funds_for_order(dclex):
     dclex.login()
-    price = dclex.market_prices()["AAPL"].last_price
+    price = next(
+        price_info.last_price
+        for price_info in dclex.prices_stream()
+        if price_info.symbol == "AAPL"
+    )
     usdc_available_balance = dclex.get_usdc_available_balance()
     stocks_quantity = math.ceil(usdc_available_balance / price) + 1
 

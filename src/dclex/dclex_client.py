@@ -291,19 +291,6 @@ class DclexClient:
             for stock in stocks_data
         }
 
-    def market_prices(self):
-        response = self._authorized_get("/stocks-prices/", {"size": 100})
-        prices_data = response["items"]
-        return {
-            stock["symbol"]: Price(
-                symbol=stock["symbol"],
-                last_price=Decimal(stock["price"]["price"]),
-                timestamp=self._parse_timestamp(stock["price"]["timestamp"]),
-                percentage_change=Decimal(stock["price"]["percentageChange"]),
-            )
-            for stock in prices_data
-        }
-
     def prices_stream_access_token(self) -> str:
         response = self._authorized_get("/prices-stream-access-token/")
         return response["pricesStreamAccessToken"]

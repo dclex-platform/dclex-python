@@ -15,13 +15,6 @@ number_of_tokens_in_circulation = aapl_stock.number_of_tokens_in_circulation
 
 dclex.login()
 
-prices = dclex.market_prices()
-aapl_price = prices["AAPL"]
-symbol = aapl_price.symbol
-last_price = aapl_price.last_price
-last_price_timestamp = aapl_price.timestamp
-percentage_change = aapl_price.percentage_change
-
 prices_stream = dclex.prices_stream()
 for price in prices_stream:
     print(price.symbol, price.last_price, price.timestamp, price.percentage_change)
