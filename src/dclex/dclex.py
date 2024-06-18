@@ -31,6 +31,7 @@ from dclex.types import (
     Portfolio,
     Stock,
     Transfer,
+    OrderStatus,
 )
 
 
@@ -315,6 +316,9 @@ class Dclex:
 
     def cancel_order(self, order_id: int) -> None:
         return self._dclex_client.cancel_order(order_id)
+
+    def get_order_status(self, order_id: int) -> OrderStatus:
+        return self._dclex_client.get_order_status(order_id)
 
     def open_orders(self) -> list[Order]:
         return self._dclex_client.open_orders()

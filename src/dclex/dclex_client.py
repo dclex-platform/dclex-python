@@ -124,6 +124,10 @@ class DclexClient:
     def cancel_order(self, order_id: int) -> None:
         self._authorized_delete(f"/open-orders/{order_id}/")
 
+    def get_order_status(self, order_id: int) -> OrderStatus:
+        response = self._authorized_get(f"/orders/{order_id}/status/")
+        return OrderStatus(response["orderStatus"])
+
     def open_orders(self, page: int = 1, size: int = 100) -> list[Order]:
         response = self._authorized_get("/open-orders/", {"page": page, "size": size})
         items = [

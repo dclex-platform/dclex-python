@@ -20,7 +20,8 @@ def test_send_buy_and_sell_limit_order(dclex, provider_url):
     aapl_available_balance_before = dclex.get_stock_available_balance("AAPL")
     aapl_total_balance_before = dclex.get_stock_total_balance("AAPL")
 
-    dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
+    order_id = dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
+    assert dclex.get_order_status(order_id) == OrderStatus.PENDING
     sleep(30)
 
     assert (

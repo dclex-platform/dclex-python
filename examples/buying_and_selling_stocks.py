@@ -10,6 +10,8 @@ dclex = Dclex(private_key=my_private_key, web3_provider_url=web3_provider_url)
 dclex.login()
 
 limit_buy_order_id = dclex.send_limit_order(OrderSide.BUY, "AAPL", 5, Decimal("185.50"))
+order_status = dclex.get_order_status(limit_buy_order_id)
+
 cancellation_date = date.today() + timedelta(days=10)
 limit_sell_order_id = dclex.send_limit_order(
     OrderSide.SELL, "AAPL", 5, Decimal("185.50"), cancellation_date
