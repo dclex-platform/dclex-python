@@ -23,6 +23,12 @@ class TransactionType(Enum):
     WITHDRAWAL = "WITHDRAWAL"
 
 
+class DistributionType(Enum):
+    REVERSE_SPLIT = "REVERSE_SPLIT"
+    DELISTING = "DELISTING"
+    DIVIDEND = "DIVIDEND"
+
+
 class TransferHistoryStatus(Enum):
     PENDING = "PENDING"
     CLAIMABLE = "CLAIMABLE"
@@ -48,6 +54,21 @@ class Transfer:
     symbol: str
     type: TransactionType
     status: TransferHistoryStatus
+
+
+@dataclass(frozen=True)
+class PendingDistribution:
+    type: DistributionType
+    stock_symbol: str
+    stock_quantity: Decimal
+
+
+@dataclass(frozen=True)
+class Distribution:
+    amount: Decimal
+    type: DistributionType
+    stock_symbol: str
+    stock_quantity: Decimal
 
 
 @dataclass(frozen=True)

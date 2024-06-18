@@ -12,9 +12,12 @@ from dclex.types import (
     ClaimableWithdrawal,
     DepositStocksSignature,
     DigitalIdentitySignature,
+    Distribution,
+    DistributionType,
     Order,
     OrderSide,
     OrderStatus,
+    PendingDistribution,
     Portfolio,
     Position,
     Price,
@@ -109,6 +112,31 @@ class DclexClient:
         ]
         if page * size < response["total"]:
             items += self.get_pending_transfers(page + 1, size)
+        return items
+
+    def get_pending_distributions(self) -> list[PendingDistribution]:
+        response = self._authorized_get("/pending-distributions/", {})
+        items = [
+            PendingDistribution(
+                type=DistributionType(item["type"]),
+                stock_symbol=item["stockSymbol"],
+                stock_quantity=Decimal(item["quantity"]),
+            )
+            for item in response["items"]
+        ]
+        return items
+
+    def get_closed_distributions(self) -> list[Distribution]:
+        response = self._authorized_get("/closed-distributions/", {})
+        items = [
+            Distribution(
+                amount=Decimal(item["amount"]),
+                type=DistributionType(item["type"]),
+                stock_symbol=item["stockSymbol"],
+                stock_quantity=Decimal(item["quantity"]),
+            )
+            for item in response["items"]
+        ]
         return items
 
     def create_digital_identity_signature(self) -> DigitalIdentitySignature:

@@ -26,9 +26,11 @@ from dclex.settings import (
 from dclex.types import (
     AccountStatus,
     ClaimableWithdrawal,
+    Distribution,
     Order,
     OrderSide,
     OrderStatus,
+    PendingDistribution,
     Portfolio,
     Stock,
     Transfer,
@@ -252,6 +254,12 @@ class Dclex:
 
     def closed_transfers(self) -> list[Transfer]:
         return self._dclex_client.get_closed_transfers()
+
+    def pending_distributions(self) -> list[PendingDistribution]:
+        return self._dclex_client.get_pending_distributions()
+
+    def closed_distributions(self) -> list[Distribution]:
+        return self._dclex_client.get_closed_distributions()
 
     def get_usdc_available_balance(self) -> Decimal:
         return self._dclex_client.portfolio().buying_power
