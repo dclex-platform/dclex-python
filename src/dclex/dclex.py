@@ -249,17 +249,25 @@ class Dclex:
             )
         return matching_withdrawals[0]
 
-    def pending_transfers(self) -> list[Transfer]:
-        return self._dclex_client.get_pending_transfers()
+    def pending_transfers(
+        self, page_number: int = 1, page_size: int = 1000
+    ) -> list[Transfer]:
+        return self._dclex_client.get_pending_transfers(page_number, page_size)
 
-    def closed_transfers(self) -> list[Transfer]:
-        return self._dclex_client.get_closed_transfers()
+    def closed_transfers(
+        self, page_number: int = 1, page_size: int = 1000
+    ) -> list[Transfer]:
+        return self._dclex_client.get_closed_transfers(page_number, page_size)
 
-    def pending_distributions(self) -> list[PendingDistribution]:
-        return self._dclex_client.get_pending_distributions()
+    def pending_distributions(
+        self, page_number: int = 1, page_size: int = 1000
+    ) -> list[PendingDistribution]:
+        return self._dclex_client.get_pending_distributions(page_number, page_size)
 
-    def closed_distributions(self) -> list[Distribution]:
-        return self._dclex_client.get_closed_distributions()
+    def closed_distributions(
+        self, page_number: int = 1, page_size: int = 1000
+    ) -> list[Distribution]:
+        return self._dclex_client.get_closed_distributions(page_number, page_size)
 
     def get_usdc_available_balance(self) -> Decimal:
         return self._dclex_client.portfolio().buying_power
@@ -328,11 +336,11 @@ class Dclex:
     def get_order_status(self, order_id: int) -> OrderStatus:
         return self._dclex_client.get_order_status(order_id)
 
-    def open_orders(self) -> list[Order]:
-        return self._dclex_client.open_orders()
+    def open_orders(self, page_number: int = 1, page_size: int = 1000) -> list[Order]:
+        return self._dclex_client.open_orders(page_number, page_size)
 
-    def closed_orders(self) -> list[Order]:
-        return self._dclex_client.closed_orders()
+    def closed_orders(self, page_number: int = 1, page_size: int = 1000) -> list[Order]:
+        return self._dclex_client.closed_orders(page_number, page_size)
 
     def stocks(self) -> dict[str, Stock]:
         return self._dclex_client.stocks()

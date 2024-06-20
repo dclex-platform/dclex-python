@@ -20,8 +20,8 @@ limit_sell_order_id = dclex.send_limit_order(
 market_sell_order_id = dclex.send_sell_market_order("AAPL", 5)
 dclex.cancel_order(market_sell_order_id)
 
-open_orders = dclex.open_orders()
-closed_orders = dclex.closed_orders()
+open_orders = dclex.open_orders(page_number=1, page_size=100)
+closed_orders = dclex.closed_orders(page_number=1, page_size=100)
 is_market_open = dclex.is_market_open()
 
 dclex.logout()

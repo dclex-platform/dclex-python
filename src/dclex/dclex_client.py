@@ -82,8 +82,10 @@ class DclexClient:
 
         return AccountStatus(response.json()["status"])
 
-    def get_pending_transfers(self, page: int = 1, size: int = 100) -> list[Transfer]:
-        response = self._authorized_get("/pending-transfers/", {})
+    def get_pending_transfers(self, page: int, size: int) -> list[Transfer]:
+        response = self._authorized_get(
+            "/pending-transfers/", {"page": page, "size": size}
+        )
         items = [
             Transfer(
                 transaction_id=item["transactionId"],
@@ -94,12 +96,12 @@ class DclexClient:
             )
             for item in response["items"]
         ]
-        if page * size < response["total"]:
-            items += self.get_pending_transfers(page + 1, size)
         return items
 
-    def get_closed_transfers(self, page: int = 1, size: int = 100) -> list[Transfer]:
-        response = self._authorized_get("/closed-transfers/", {})
+    def get_closed_transfers(self, page: int, size: int) -> list[Transfer]:
+        response = self._authorized_get(
+            "/closed-transfers/", {"page": page, "size": size}
+        )
         items = [
             Transfer(
                 transaction_id=item["transactionId"],
@@ -110,12 +112,14 @@ class DclexClient:
             )
             for item in response["items"]
         ]
-        if page * size < response["total"]:
-            items += self.get_pending_transfers(page + 1, size)
         return items
 
-    def get_pending_distributions(self) -> list[PendingDistribution]:
-        response = self._authorized_get("/pending-distributions/", {})
+    def get_pending_distributions(
+        self, page: int, size: int
+    ) -> list[PendingDistribution]:
+        response = self._authorized_get(
+            "/pending-distributions/", {"page": page, "size": size}
+        )
         items = [
             PendingDistribution(
                 type=DistributionType(item["type"]),
@@ -126,8 +130,10 @@ class DclexClient:
         ]
         return items
 
-    def get_closed_distributions(self) -> list[Distribution]:
-        response = self._authorized_get("/closed-distributions/", {})
+    def get_closed_distributions(self, page: int, size: int) -> list[Distribution]:
+        response = self._authorized_get(
+            "/closed-distributions/", {"page": page, "size": size}
+        )
         items = [
             Distribution(
                 amount=Decimal(item["amount"]),
@@ -156,7 +162,7 @@ class DclexClient:
         response = self._authorized_get(f"/orders/{order_id}/status/")
         return OrderStatus(response["orderStatus"])
 
-    def open_orders(self, page: int = 1, size: int = 100) -> list[Order]:
+    def open_orders(self, page: int, size: int) -> list[Order]:
         response = self._authorized_get("/open-orders/", {"page": page, "size": size})
         items = [
             Order(
@@ -175,11 +181,9 @@ class DclexClient:
             )
             for item in response["items"]
         ]
-        if page * size < response["total"]:
-            items += self.open_orders(page + 1, size)
         return items
 
-    def closed_orders(self, page: int = 1, size: int = 100) -> list[Order]:
+    def closed_orders(self, page: int, size: int) -> list[Order]:
         response = self._authorized_get("/closed-orders/", {"page": page, "size": size})
         items = [
             Order(
@@ -198,8 +202,6 @@ class DclexClient:
             )
             for item in response["items"]
         ]
-        if page * size < response["total"]:
-            items += self.closed_orders(page + 1, size)
         return items
 
     def get_deposit_stocks_signature(
