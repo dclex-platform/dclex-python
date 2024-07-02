@@ -18,7 +18,6 @@ withdraw_aapl_tx_hash = dclex.claim_stock_withdrawal(1)
 pending_transfers = dclex.pending_transfers(page_number=1, page_size=100)
 closed_transfers = dclex.closed_transfers(page_number=1, page_size=100)
 claimable_withdrawals = dclex.claimable_withdrawals()
-pending_distributions = dclex.pending_distributions(page_number=1, page_size=100)
-closed_distributions = dclex.closed_distributions(page_number=1, page_size=100)
+distributions = dclex.distributions(page_number=1, page_size=100)
 
 dclex.logout()

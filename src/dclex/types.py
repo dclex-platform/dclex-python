@@ -57,13 +57,6 @@ class Transfer:
 
 
 @dataclass(frozen=True)
-class PendingDistribution:
-    type: DistributionType
-    stock_symbol: str
-    stock_quantity: Decimal
-
-
-@dataclass(frozen=True)
 class Distribution:
     amount: Decimal
     type: DistributionType

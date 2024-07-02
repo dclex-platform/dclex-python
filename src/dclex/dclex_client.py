@@ -17,7 +17,6 @@ from dclex.types import (
     Order,
     OrderSide,
     OrderStatus,
-    PendingDistribution,
     Portfolio,
     Position,
     Price,
@@ -114,23 +113,7 @@ class DclexClient:
         ]
         return items
 
-    def get_pending_distributions(
-        self, page: int, size: int
-    ) -> list[PendingDistribution]:
-        response = self._authorized_get(
-            "/pending-distributions/", {"page": page, "size": size}
-        )
-        items = [
-            PendingDistribution(
-                type=DistributionType(item["type"]),
-                stock_symbol=item["stockSymbol"],
-                stock_quantity=Decimal(item["quantity"]),
-            )
-            for item in response["items"]
-        ]
-        return items
-
-    def get_closed_distributions(self, page: int, size: int) -> list[Distribution]:
+    def get_distributions(self, page: int, size: int) -> list[Distribution]:
         response = self._authorized_get(
             "/closed-distributions/", {"page": page, "size": size}
         )

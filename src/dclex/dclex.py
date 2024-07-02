@@ -30,7 +30,6 @@ from dclex.types import (
     Order,
     OrderSide,
     OrderStatus,
-    PendingDistribution,
     Portfolio,
     Stock,
     Transfer,
@@ -259,15 +258,10 @@ class Dclex:
     ) -> list[Transfer]:
         return self._dclex_client.get_closed_transfers(page_number, page_size)
 
-    def pending_distributions(
-        self, page_number: int = 1, page_size: int = 1000
-    ) -> list[PendingDistribution]:
-        return self._dclex_client.get_pending_distributions(page_number, page_size)
-
-    def closed_distributions(
+    def distributions(
         self, page_number: int = 1, page_size: int = 1000
     ) -> list[Distribution]:
-        return self._dclex_client.get_closed_distributions(page_number, page_size)
+        return self._dclex_client.get_distributions(page_number, page_size)
 
     def get_usdc_available_balance(self) -> Decimal:
         return self._dclex_client.portfolio().buying_power
