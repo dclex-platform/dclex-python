@@ -2,38 +2,38 @@ from unittest.mock import ANY
 
 import pytest
 
-from dclex import AccountNotVerified, DigitalIdentityAlreadyClaimed
-from dclex.types import Portfolio
+from primedelta import AccountNotVerified, DigitalIdentityAlreadyClaimed
+from primedelta.types import Portfolio
 
 
-def test_login_and_logout(dclex):
-    assert not dclex.logged_in()
+def test_login_and_logout(primedelta):
+    assert not primedelta.logged_in()
 
-    dclex.login()
-    assert dclex.logged_in()
+    primedelta.login()
+    assert primedelta.logged_in()
 
-    dclex.logout()
-    assert not dclex.logged_in()
+    primedelta.logout()
+    assert not primedelta.logged_in()
 
 
 def test_claim_digital_identity_raises_when_user_has_already_claimed_it(
-    dclex, provider_url
+    primedelta, provider_url
 ):
-    dclex.login()
+    primedelta.login()
     with pytest.raises(DigitalIdentityAlreadyClaimed):
-        dclex.claim_digital_identity()
+        primedelta.claim_digital_identity()
 
 
-def test_claim_digital_identity_raises_when_user_is_not_verified(dclex_unverified):
-    dclex_unverified.login()
+def test_claim_digital_identity_raises_when_user_is_not_verified(primedelta_unverified):
+    primedelta_unverified.login()
     with pytest.raises(AccountNotVerified):
-        dclex_unverified.claim_digital_identity()
+        primedelta_unverified.claim_digital_identity()
 
 
-def test_should_get_portfolio(dclex):
-    dclex.login()
+def test_should_get_portfolio(primedelta):
+    primedelta.login()
 
-    assert dclex.portfolio() == Portfolio(
+    assert primedelta.portfolio() == Portfolio(
         buying_power=ANY,
         total_equity=ANY,
         total_funds=ANY,
@@ -43,7 +43,7 @@ def test_should_get_portfolio(dclex):
     )
 
 
-def test_portfolio_raises_when_user_is_not_verified(dclex_unverified):
-    dclex_unverified.login()
+def test_portfolio_raises_when_user_is_not_verified(primedelta_unverified):
+    primedelta_unverified.login()
     with pytest.raises(AccountNotVerified):
-        dclex_unverified.portfolio()
+        primedelta_unverified.portfolio()

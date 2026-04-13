@@ -6,8 +6,8 @@ from typing import Optional
 import requests
 from sseclient import SSEClient
 
-from dclex.settings import DCLEX_BASE_URL
-from dclex.types import (
+from primedelta.settings import PRIMEDELTA_BASE_URL
+from primedelta.types import (
     AccountStatus,
     ClaimableWithdrawal,
     DepositStocksSignature,
@@ -44,19 +44,19 @@ class UserSignedMessageVerificationError(Exception):
     pass
 
 
-class DclexClient:
+class PrimeDeltaClient:
     def __init__(self) -> None:
         self._token = None
 
     @staticmethod
     def get_nonce() -> str:
-        response = requests.get(f"{DCLEX_BASE_URL}/users/nonce/")
+        response = requests.get(f"{PRIMEDELTA_BASE_URL}/users/nonce/")
         response.raise_for_status()
         return response.json()["nonce"]
 
     def login(self, message: str, signature: str, nonce: str) -> None:
         response = requests.post(
-            f"{DCLEX_BASE_URL}/users/verify/",
+            f"{PRIMEDELTA_BASE_URL}/users/verify/",
             data={"message": message, "signature": signature, "nonce": nonce},
         )
         if response.status_code == 400:
@@ -72,7 +72,7 @@ class DclexClient:
 
     def get_account_status(self) -> AccountStatus:
         response = requests.get(
-            f"{DCLEX_BASE_URL}/verification-status/",
+            f"{PRIMEDELTA_BASE_URL}/verification-status/",
             headers={"Authorization": f"Token {self._token}"},
         )
         if response.status_code == 401:
@@ -290,7 +290,7 @@ class DclexClient:
         return response["orderId"]
 
     def stocks(self) -> dict[str, Stock]:
-        response = requests.get(f"{DCLEX_BASE_URL}/stocks/", {"size": 100})
+        response = requests.get(f"{PRIMEDELTA_BASE_URL}/stocks/", {"size": 100})
         response.raise_for_status()
         stocks_data = response.json()["items"]
         return {
@@ -310,7 +310,7 @@ class DclexClient:
 
     def prices_stream(self, prices_stream_access_token: str):
         for sse_message in SSEClient(
-            f"{DCLEX_BASE_URL}/prices-stream/",
+            f"{PRIMEDELTA_BASE_URL}/prices-stream/",
             params={"token": prices_stream_access_token},
         ):
             price_data = json.loads(sse_message.data)
@@ -323,7 +323,7 @@ class DclexClient:
 
     @staticmethod
     def is_market_open() -> bool:
-        response = requests.get(f"{DCLEX_BASE_URL}/market-status/")
+        response = requests.get(f"{PRIMEDELTA_BASE_URL}/market-status/")
         response.raise_for_status()
         return response.json()["isMarketOpen"]
 
@@ -333,7 +333,7 @@ class DclexClient:
 
     def _authorized_post(self, endpoint: str, request_data: dict) -> dict:
         response = requests.post(
-            f"{DCLEX_BASE_URL}{endpoint}",
+            f"{PRIMEDELTA_BASE_URL}{endpoint}",
             headers={"Authorization": f"Token {self._token}"},
             json=request_data,
         )
@@ -353,7 +353,7 @@ class DclexClient:
         self, endpoint: str, params: Optional[dict[str, str | int]] = None
     ) -> dict:
         response = requests.get(
-            f"{DCLEX_BASE_URL}{endpoint}",
+            f"{PRIMEDELTA_BASE_URL}{endpoint}",
             headers={"Authorization": f"Token {self._token}"},
             params=params,
         )
@@ -369,7 +369,7 @@ class DclexClient:
 
     def _authorized_delete(self, endpoint: str) -> None:
         response = requests.delete(
-            f"{DCLEX_BASE_URL}{endpoint}",
+            f"{PRIMEDELTA_BASE_URL}{endpoint}",
             headers={"Authorization": f"Token {self._token}"},
         )
         if response.status_code == 401:

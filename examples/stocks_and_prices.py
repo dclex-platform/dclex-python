@@ -1,11 +1,11 @@
-from dclex import Dclex
+from primedelta import PrimeDelta
 
 my_private_key = "0x"
-web3_provider_url = "https://eth-sepolia.g.alchemy.com/v2/{your_api_key}"
+web3_provider_url = "YOUR_WEB3_PROVIDER_URL"
 
-dclex = Dclex(private_key=my_private_key, web3_provider_url=web3_provider_url)
+primedelta = PrimeDelta(private_key=my_private_key, web3_provider_url=web3_provider_url)
 
-stocks = dclex.stocks()
+stocks = primedelta.stocks()
 aapl_stock = stocks["AAPL"]
 symbol = aapl_stock.symbol
 name = aapl_stock.name
@@ -13,10 +13,10 @@ cusip = aapl_stock.cusip
 contract_address = aapl_stock.contract_address
 number_of_tokens_in_circulation = aapl_stock.number_of_tokens_in_circulation
 
-dclex.login()
+primedelta.login()
 
-prices_stream = dclex.prices_stream()
+prices_stream = primedelta.prices_stream()
 for price in prices_stream:
     print(price.symbol, price.last_price, price.timestamp, price.percentage_change)
 
-dclex.logout()
+primedelta.logout()

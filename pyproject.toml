@@ -3,15 +3,14 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dclex"
-version = "0.0.13"
-description = "DCLEX python library"
+name = "primedelta"
+version = "0.1.0"
+description = "Prime Delta Python library"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 license = {file = "LICENSE"}
 classifiers = [
     "Intended Audience :: Financial and Insurance Industry",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -21,4 +20,4 @@ classifiers = [
 dependencies = ["web3==6.19.0", "siwe==2.4.1", "requests==2.32.3", "sseclient==0.0.27"]
 
 [tool.setuptools.package-data]
-dclex = ["resources/*.json"]
+primedelta = ["resources/*.json"]

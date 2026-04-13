@@ -2,7 +2,7 @@ import pytest
 from eth_typing.encoding import HexStr
 from web3 import Web3
 
-from dclex.dclex import Dclex
+from primedelta.primedelta import PrimeDelta
 
 
 def pytest_addoption(parser):
@@ -26,14 +26,14 @@ def unverified_user_private_key():
     return Web3.to_hex(account.key)
 
 
-@pytest.fixture(name="dclex")
-def dclex_fixture(test_account_private_key, provider_url) -> Dclex:
-    return Dclex(private_key=test_account_private_key, web3_provider_url=provider_url)
+@pytest.fixture(name="primedelta")
+def primedelta_fixture(test_account_private_key, provider_url) -> PrimeDelta:
+    return PrimeDelta(private_key=test_account_private_key, web3_provider_url=provider_url)
 
 
 @pytest.fixture
-def dclex_unverified(unverified_user_private_key, provider_url):
-    return Dclex(
+def primedelta_unverified(unverified_user_private_key, provider_url):
+    return PrimeDelta(
         private_key=unverified_user_private_key, web3_provider_url=provider_url
     )
 

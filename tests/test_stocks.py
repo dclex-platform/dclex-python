@@ -3,13 +3,13 @@ from decimal import Decimal
 
 import pytest
 
-from dclex import AccountNotVerified
+from primedelta import AccountNotVerified
 
 
-def test_stocks_returns_dictionary_of_available_stocks(dclex_unverified):
-    dclex_unverified.login()
+def test_stocks_returns_dictionary_of_available_stocks(primedelta_unverified):
+    primedelta_unverified.login()
 
-    stocks = dclex_unverified.stocks()
+    stocks = primedelta_unverified.stocks()
 
     apple_stock = stocks["AAPL"]
     assert apple_stock.symbol == "AAPL"
@@ -19,16 +19,16 @@ def test_stocks_returns_dictionary_of_available_stocks(dclex_unverified):
     assert apple_stock.number_of_tokens_in_circulation == Decimal(0)
 
 
-def test_prices_stream_raises_when_user_is_not_verified(dclex_unverified):
-    dclex_unverified.login()
+def test_prices_stream_raises_when_user_is_not_verified(primedelta_unverified):
+    primedelta_unverified.login()
     with pytest.raises(AccountNotVerified):
-        dclex_unverified.prices_stream()
+        primedelta_unverified.prices_stream()
 
 
-def test_prices_stream(dclex):
-    dclex.login()
+def test_prices_stream(primedelta):
+    primedelta.login()
 
-    prices_stream = dclex.prices_stream()
+    prices_stream = primedelta.prices_stream()
 
     price = next(prices_stream)
     assert isinstance(price.symbol, str)

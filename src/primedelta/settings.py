@@ -1,17 +1,17 @@
 import json
 import os
 
-CHAIN_ID: int = 11155111
+CHAIN_ID: int = 2028
 SIWE_MESSAGE: str = (
     "By signing this message you confirm that you have completely"
-    " read and understand DCLEX's terms of service including all policies"
+    " read and understand Prime Delta's terms of service including all policies"
     " and disclosures and that you agree with each part of them."
 )
-SIWE_DOMAIN: str = "app.stg.dclex.com"
-SIWE_URI: str = "http://app.stg.dclex.com"
+SIWE_DOMAIN: str = "app.primedelta.io"
+SIWE_URI: str = "https://app.primedelta.io"
 USDC_ASSET_TYPE: str = "USDC"
 
-DCLEX_BASE_URL = "https://api.stg.dclex.com"
+PRIMEDELTA_BASE_URL = "https://api.primedelta.io"
 USDC_CONTRACT_ADDRESS = "0xd3AA652C5b750F8195B46E185Bad5C9965bB37ea"
 VAULT_CONTRACT_ADDRESS = "0x9171338754ac82cdE212Dadc924bfB8F2432E008"
 DIGITAL_IDENTITY_CONTRACT_ADDRESS = "0xc9B2a2e25116865286b13859053eBa163C62dace"
