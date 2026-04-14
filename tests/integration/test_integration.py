@@ -67,6 +67,48 @@ class TestOrdersIntegration:
 
 
 @pytest.mark.integration
+class TestOrderPlacementIntegration:
+    """Tests for order placement and cancellation.
+
+    These tests place real orders but use unrealistic prices
+    to ensure they won't execute.
+    """
+
+    def test_place_and_cancel_limit_buy_order(self, primedelta_logged_in):
+        """Place a limit buy order at a very low price, then cancel it."""
+        import time
+        from decimal import Decimal
+        from primedelta.types import OrderSide, OrderStatus
+
+        # Place limit buy at $1 (unrealistically low, won't execute)
+        order_id = primedelta_logged_in.send_limit_order(
+            side=OrderSide.BUY,
+            stock_symbol="AAPL",
+            amount=1,
+            price_limit=Decimal("1.00"),
+        )
+
+        assert order_id is not None
+        assert isinstance(order_id, int)
+
+        # Check order status is pending
+        status = primedelta_logged_in.get_order_status(order_id)
+        assert status == OrderStatus.PENDING
+
+        # Cancel the order
+        primedelta_logged_in.cancel_order(order_id)
+
+        # Wait for cancellation to process and verify
+        for _ in range(5):
+            time.sleep(0.5)
+            status = primedelta_logged_in.get_order_status(order_id)
+            if status == OrderStatus.CANCELED:
+                break
+
+        assert status == OrderStatus.CANCELED
+
+
+@pytest.mark.integration
 class TestTransfersIntegration:
     def test_get_pending_transfers(self, primedelta_logged_in):
         transfers = primedelta_logged_in.pending_transfers()

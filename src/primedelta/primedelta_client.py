@@ -155,7 +155,7 @@ class PrimeDeltaClient:
                 symbol=item["stockSymbol"],
                 quantity=int(Decimal(item["quantity"])),
                 price=Decimal(item["price"]),
-                status=OrderStatus(item["status"]),
+                status=OrderStatus.PENDING,  # Open orders are always pending
                 date_of_cancellation=(
                     date.fromisoformat(item["dateOfCancellation"])
                     if item["dateOfCancellation"]
