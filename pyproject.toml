@@ -19,5 +19,11 @@ classifiers = [
 ]
 dependencies = ["web3==6.19.0", "siwe==2.4.1", "requests==2.32.3", "sseclient==0.0.27"]
 
+[dependency-groups]
+dev = ["pytest>=8.0.0", "python-dotenv>=1.0.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
 [tool.setuptools.package-data]
 primedelta = ["resources/*.json"]
