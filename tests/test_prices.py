@@ -139,6 +139,8 @@ class TestPythPricesStream:
 
 class TestPricesStreamAutoSwitch:
     def test_uses_broker_api_when_logged_in(self):
+        from primedelta.types import AccountStatus
+
         mock_token = "test_token"
         mock_price = Price(
             symbol="AAPL",
@@ -155,15 +157,20 @@ class TestPricesStreamAutoSwitch:
         with patch.object(primedelta, "logged_in", return_value=True):
             with patch.object(
                 primedelta._primedelta_client,
-                "prices_stream_access_token",
-                return_value=mock_token,
-            ) as mock_token_method:
+                "get_account_status",
+                return_value=AccountStatus.VERIFIED,
+            ):
                 with patch.object(
                     primedelta._primedelta_client,
-                    "prices_stream",
-                    return_value=iter([mock_price]),
-                ) as mock_stream:
-                    prices = list(primedelta.prices_stream())
+                    "prices_stream_access_token",
+                    return_value=mock_token,
+                ) as mock_token_method:
+                    with patch.object(
+                        primedelta._primedelta_client,
+                        "prices_stream",
+                        return_value=iter([mock_price]),
+                    ) as mock_stream:
+                        prices = list(primedelta.prices_stream())
 
         mock_token_method.assert_called_once()
         mock_stream.assert_called_once_with(mock_token)

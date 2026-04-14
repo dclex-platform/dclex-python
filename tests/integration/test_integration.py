@@ -113,7 +113,6 @@ class TestPriceStreamingIntegration:
         assert isinstance(price.last_price, Decimal)
         assert price.last_price > 0
 
-    @pytest.mark.skip(reason="prices-stream-access-token endpoint not available - need to find how frontend gets the token")
     def test_prices_stream_uses_broker_when_logged_in(self, primedelta_logged_in):
         """prices_stream() uses broker API when logged in."""
         from decimal import Decimal

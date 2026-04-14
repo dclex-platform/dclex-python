@@ -305,8 +305,9 @@ class PrimeDeltaClient:
         }
 
     def prices_stream_access_token(self) -> str:
-        response = self._authorized_get("/prices-stream-access-token/")
-        return response["pricesStreamAccessToken"]
+        if not self._token:
+            raise NotLoggedIn()
+        return self._token
 
     def prices_stream(self, prices_stream_access_token: str):
         for sse_message in SSEClient(

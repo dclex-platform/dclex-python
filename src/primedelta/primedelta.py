@@ -349,8 +349,18 @@ class PrimeDelta:
             symbols: List of stock symbols to stream prices for.
                      Only used when not logged in (Pyth stream).
                      If None, streams all available stocks.
+
+        Raises:
+            AccountNotVerified: If logged in but account is not verified.
+                                Use pyth_prices_stream() or verify at https://app.primedelta.io
         """
         if self.logged_in():
+            account_status = self._primedelta_client.get_account_status()
+            if account_status not in [AccountStatus.VERIFIED, AccountStatus.DID_MINTED]:
+                raise AccountNotVerified(
+                    "Account not verified. Use pyth_prices_stream() for public prices "
+                    "or verify your account at https://app.primedelta.io"
+                )
             prices_stream_access_token = self._primedelta_client.prices_stream_access_token()
             return self._primedelta_client.prices_stream(prices_stream_access_token)
         else:
