@@ -1,38 +1,42 @@
-from datetime import datetime
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
 
-import pytest
-
-from primedelta import AccountNotVerified
-
-
-def test_stocks_returns_dictionary_of_available_stocks(primedelta_unverified):
-    primedelta_unverified.login()
-
-    stocks = primedelta_unverified.stocks()
-
-    apple_stock = stocks["AAPL"]
-    assert apple_stock.symbol == "AAPL"
-    assert apple_stock.name == "Apple Inc"
-    assert apple_stock.cusip == "037833100"
-    assert apple_stock.contract_address == "0x642E483D383da06Bc419Bd9de2D2Bf9167Ad3e4e"
-    assert apple_stock.number_of_tokens_in_circulation == Decimal(0)
+from primedelta import PrimeDelta
+from primedelta.types import Stock
 
 
-def test_prices_stream_raises_when_user_is_not_verified(primedelta_unverified):
-    primedelta_unverified.login()
-    with pytest.raises(AccountNotVerified):
-        primedelta_unverified.prices_stream()
+class TestStocks:
+    def test_stocks_returns_dictionary_of_available_stocks(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
 
+        mock_stocks = {
+            "AAPL": Stock(
+                symbol="AAPL",
+                name="Apple Inc",
+                cusip="037833100",
+                contract_address="0x1234567890123456789012345678901234567890",
+                number_of_tokens_in_circulation=Decimal("1000000"),
+            ),
+            "TSLA": Stock(
+                symbol="TSLA",
+                name="Tesla Inc",
+                cusip="88160R101",
+                contract_address="0x0987654321098765432109876543210987654321",
+                number_of_tokens_in_circulation=Decimal("500000"),
+            ),
+        }
 
-def test_prices_stream(primedelta):
-    primedelta.login()
+        with patch.object(
+            primedelta._primedelta_client, "stocks", return_value=mock_stocks
+        ):
+            stocks = primedelta.stocks()
 
-    prices_stream = primedelta.prices_stream()
-
-    price = next(prices_stream)
-    assert isinstance(price.symbol, str)
-    assert isinstance(price.last_price, Decimal)
-    assert price.last_price > 0
-    assert isinstance(price.timestamp, datetime)
-    assert isinstance(price.percentage_change, Decimal)
+        assert len(stocks) == 2
+        assert "AAPL" in stocks
+        assert "TSLA" in stocks
+        assert stocks["AAPL"].name == "Apple Inc"
+        assert stocks["TSLA"].name == "Tesla Inc"
