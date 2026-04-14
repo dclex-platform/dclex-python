@@ -6,7 +6,7 @@ from typing import Optional
 import requests
 from sseclient import SSEClient
 
-from primedelta.settings import PRIMEDELTA_BASE_URL
+from primedelta.settings import PRIMEDELTA_BASE_URL, PYTH_HERMES_BASE_URL
 from primedelta.types import (
     AccountStatus,
     ClaimableWithdrawal,
@@ -326,6 +326,79 @@ class PrimeDeltaClient:
         response = requests.get(f"{PRIMEDELTA_BASE_URL}/market-status/")
         response.raise_for_status()
         return response.json()["isMarketOpen"]
+
+    @staticmethod
+    def get_pyth_feed_ids(symbols: list[str]) -> dict[str, str]:
+        """Fetch Pyth price feed IDs for given stock symbols.
+
+        Returns a mapping of symbol -> pyth_feed_id for regular market hours feeds.
+        """
+        feed_ids = {}
+        for symbol in symbols:
+            response = requests.get(
+                f"{PYTH_HERMES_BASE_URL}/v2/price_feeds",
+                params={"query": symbol, "asset_type": "equity"},
+            )
+            response.raise_for_status()
+            feeds = response.json()
+
+            # Find the regular market hours feed (no suffix like .PRE, .POST, .ON)
+            for feed in feeds:
+                feed_symbol = feed.get("attributes", {}).get("symbol", "")
+                base = feed.get("attributes", {}).get("base", "")
+                if base == symbol and feed_symbol == f"Equity.US.{symbol}/USD":
+                    feed_ids[symbol] = feed["id"]
+                    break
+
+        return feed_ids
+
+    def pyth_prices_stream(self, symbols: list[str]):
+        """Stream prices from Pyth Hermes API for given stock symbols.
+
+        This method does not require authentication and can be used when not logged in.
+        """
+        feed_ids = self.get_pyth_feed_ids(symbols)
+
+        if not feed_ids:
+            return
+
+        # Build query string with all feed IDs
+        ids_param = "&".join(f"ids[]={fid}" for fid in feed_ids.values())
+        stream_url = f"{PYTH_HERMES_BASE_URL}/v2/updates/price/stream?{ids_param}"
+
+        # Create reverse mapping: feed_id -> symbol
+        id_to_symbol = {v: k for k, v in feed_ids.items()}
+
+        for sse_message in SSEClient(stream_url):
+            if not sse_message.data:
+                continue
+
+            try:
+                data = json.loads(sse_message.data)
+                parsed_prices = data.get("parsed", [])
+
+                for price_data in parsed_prices:
+                    feed_id = price_data.get("id", "")
+                    symbol = id_to_symbol.get(feed_id)
+
+                    if symbol and "price" in price_data:
+                        price_info = price_data["price"]
+                        # Convert price using exponent (e.g., price=25821026, expo=-5 -> 258.21026)
+                        raw_price = int(price_info["price"])
+                        expo = int(price_info["expo"])
+                        actual_price = Decimal(raw_price) * Decimal(10) ** expo
+
+                        publish_time = price_info.get("publish_time", 0)
+                        timestamp = datetime.fromtimestamp(publish_time, tz=timezone.utc)
+
+                        yield Price(
+                            symbol=symbol,
+                            last_price=actual_price,
+                            timestamp=timestamp,
+                            percentage_change=Decimal(0),  # Pyth doesn't provide percentage change
+                        )
+            except (json.JSONDecodeError, KeyError, ValueError):
+                continue
 
     @staticmethod
     def _parse_timestamp(timestamp: str) -> datetime:

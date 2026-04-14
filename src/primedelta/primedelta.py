@@ -339,9 +339,37 @@ class PrimeDelta:
     def stocks(self) -> dict[str, Stock]:
         return self._primedelta_client.stocks()
 
-    def prices_stream(self):
-        prices_stream_access_token = self._primedelta_client.prices_stream_access_token()
-        return self._primedelta_client.prices_stream(prices_stream_access_token)
+    def prices_stream(self, symbols: Optional[list[str]] = None):
+        """Stream real-time price updates.
+
+        When logged in, uses the broker's authenticated price stream.
+        When not logged in, uses Pyth Hermes API for public price feeds.
+
+        Args:
+            symbols: List of stock symbols to stream prices for.
+                     Only used when not logged in (Pyth stream).
+                     If None, streams all available stocks.
+        """
+        if self.logged_in():
+            prices_stream_access_token = self._primedelta_client.prices_stream_access_token()
+            return self._primedelta_client.prices_stream(prices_stream_access_token)
+        else:
+            if symbols is None:
+                symbols = list(self.stocks().keys())
+            return self._primedelta_client.pyth_prices_stream(symbols)
+
+    def pyth_prices_stream(self, symbols: Optional[list[str]] = None):
+        """Stream prices from Pyth Hermes API.
+
+        This method does not require authentication and can be used when not logged in.
+
+        Args:
+            symbols: List of stock symbols to stream prices for.
+                     If None, streams all available stocks.
+        """
+        if symbols is None:
+            symbols = list(self.stocks().keys())
+        return self._primedelta_client.pyth_prices_stream(symbols)
 
     def _build_and_send_transaction(self, contract_function: ContractFunction) -> str:
         transaction = contract_function.build_transaction(
