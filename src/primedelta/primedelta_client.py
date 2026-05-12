@@ -54,6 +54,12 @@ class PrimeDeltaClient:
         response.raise_for_status()
         return response.json()["nonce"]
 
+    @staticmethod
+    def get_contracts() -> dict:
+        response = requests.get(f"{PRIMEDELTA_BASE_URL}/contracts/")
+        response.raise_for_status()
+        return response.json()
+
     def login(self, message: str, signature: str, nonce: str) -> None:
         response = requests.post(
             f"{PRIMEDELTA_BASE_URL}/users/verify/",
@@ -135,7 +141,8 @@ class PrimeDeltaClient:
         return DigitalIdentitySignature(
             signature=response["signature"],
             nonce=response["nonce"],
-            nationality=response["nationality"],
+            data=response["data"],
+            is_pro=response["isPro"],
         )
 
     def cancel_order(self, order_id: int) -> None:
@@ -327,6 +334,27 @@ class PrimeDeltaClient:
         response = requests.get(f"{PRIMEDELTA_BASE_URL}/market-status/")
         response.raise_for_status()
         return response.json()["isMarketOpen"]
+
+    def get_signed_price_updates(self, symbols: list[str]) -> list[bytes]:
+        """Fetch FIOracle-format signed price updates from the backend.
+
+        Returns a list of 117-byte packed updates (feedId + price + expo +
+        publishTime + v + r + s) ready to pass as `pythUpdateData` to the
+        DCLEX router/pool. Skips symbols the backend doesn't have a price for.
+        """
+        if not symbols:
+            return []
+        # `/signed-prices/` accepts Bearer auth, unlike most other endpoints
+        # which use `Authorization: Token <token>`.
+        response = requests.get(
+            f"{PRIMEDELTA_BASE_URL}/signed-prices/",
+            params={"symbols": ",".join(symbols)},
+            headers={"Authorization": f"Bearer {self._token}"},
+        )
+        if response.status_code == 401:
+            raise NotLoggedIn()
+        response.raise_for_status()
+        return [bytes.fromhex(item["signature"].removeprefix("0x")) for item in response.json()]
 
     @staticmethod
     def get_pyth_feed_ids(symbols: list[str]) -> dict[str, str]:

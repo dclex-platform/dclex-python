@@ -7,21 +7,28 @@ from siwe import SiweMessage
 from web3 import Web3
 from web3.contract.contract import ContractFunction
 
+from primedelta.contracts import Contracts
+from primedelta.dex.handlers import (
+    _AMMPoolHandler,
+    _DclexPoolHandler,
+    _RouterSwapHandler,
+)
+from primedelta.dex.params import (
+    AddLiquidityParams,
+    AMMAddLiquidity,
+    AMMRemoveLiquidity,
+    PoolType,
+    PriceFeedAddLiquidity,
+    PriceFeedRemoveLiquidity,
+    RemoveLiquidityParams,
+    SwapSide,
+)
 from primedelta.primedelta_client import APIError, PrimeDeltaClient, NotLoggedIn
 from primedelta.settings import (
-    BLOCKCHAIN_FALSE_VALUE,
-    CHAIN_ID,
-    DIGITAL_IDENTITY_CONTRACT_ABI,
-    DIGITAL_IDENTITY_CONTRACT_ADDRESS,
-    FACTORY_CONTRACT_ABI,
-    FACTORY_CONTRACT_ADDRESS,
+    PRIMEDELTA_APP_URL,
     SIWE_DOMAIN,
     SIWE_MESSAGE,
     SIWE_URI,
-    USDC_CONTRACT_ABI,
-    USDC_CONTRACT_ADDRESS,
-    VAULT_CONTRACT_ABI,
-    VAULT_CONTRACT_ADDRESS,
 )
 from primedelta.types import (
     AccountStatus,
@@ -57,6 +64,33 @@ class PrimeDelta:
         self._account = Web3().eth.account.from_key(private_key)
         self._web3 = Web3(Web3.HTTPProvider(web3_provider_url))
         self._primedelta_client = PrimeDeltaClient()
+        self._contracts: Optional[Contracts] = None
+        self._dclex_handler = _DclexPoolHandler(
+            web3=self._web3,
+            account=self._account,
+            contracts_provider=self._get_contracts,
+            send_tx=self._build_and_send_transaction,
+        )
+        self._amm_handler = _AMMPoolHandler(
+            web3=self._web3,
+            account=self._account,
+            contracts_provider=self._get_contracts,
+            send_tx=self._build_and_send_transaction,
+        )
+        self._router_swapper = _RouterSwapHandler(
+            web3=self._web3,
+            account=self._account,
+            contracts_provider=self._get_contracts,
+            signed_prices_fetcher=self._primedelta_client.get_signed_price_updates,
+            send_tx=self._build_and_send_transaction,
+        )
+
+    def _get_contracts(self) -> Contracts:
+        if self._contracts is None:
+            self._contracts = Contracts.from_dict(
+                self._primedelta_client.get_contracts()
+            )
+        return self._contracts
 
     def login(self) -> None:
         nonce = self._primedelta_client.get_nonce()
@@ -68,7 +102,7 @@ class PrimeDelta:
                 "statement": SIWE_MESSAGE,
                 "uri": SIWE_URI,
                 "version": "1",
-                "chain_id": CHAIN_ID,
+                "chain_id": self._get_contracts().chain_id,
                 "nonce": nonce,
                 "issued_at": issued_at,
             }
@@ -97,19 +131,20 @@ class PrimeDelta:
 
         signature = self._primedelta_client.create_digital_identity_signature()
 
+        digital_identity = self._get_contracts().core.digital_identity
         digital_identity_contract_address = self._web3.to_checksum_address(
-            DIGITAL_IDENTITY_CONTRACT_ADDRESS
+            digital_identity.address
         )
         digital_identity_contract = self._web3.eth.contract(
-            address=digital_identity_contract_address, abi=DIGITAL_IDENTITY_CONTRACT_ABI
+            address=digital_identity_contract_address, abi=digital_identity.abi
         )
         return self._build_and_send_transaction(
             digital_identity_contract.functions.mint(
                 {
                     "account": self._account.address,
                     "nonce": int.from_bytes(bytes.fromhex(signature.nonce), "big"),
-                    "isPro": BLOCKCHAIN_FALSE_VALUE,
-                    "data": bytes.fromhex(signature.nationality),
+                    "isPro": signature.is_pro,
+                    "data": bytes.fromhex(signature.data),
                 },
                 bytes.fromhex(signature.signature),
             )
@@ -118,18 +153,41 @@ class PrimeDelta:
     def get_account_status(self) -> AccountStatus:
         return self._primedelta_client.get_account_status()
 
+    def verification_url(self) -> str:
+        """Return the URL of the web page where the user completes KYC.
+
+        Verification (uploading ID, taking a selfie, etc.) is performed in the
+        web app, not via the SDK. After verification completes there, the
+        backend marks the account as VERIFIED and the SDK can call
+        `claim_digital_identity()` to mint the on-chain DID NFT.
+        """
+        return PRIMEDELTA_APP_URL
+
+    def open_verification_page(self) -> str:
+        """Open the verification web page in the user's default browser.
+
+        Returns the URL that was opened, so callers can fall back to printing
+        it if `webbrowser.open` returned False (headless environments).
+        """
+        import webbrowser
+
+        url = self.verification_url()
+        webbrowser.open(url)
+        return url
+
     def deposit_usdc(self, amount: Decimal) -> str:
         account_status = self._primedelta_client.get_account_status()
         if account_status not in [AccountStatus.VERIFIED, AccountStatus.DID_MINTED]:
             raise AccountNotVerified()
 
-        usdc_contract_address = self._web3.to_checksum_address(USDC_CONTRACT_ADDRESS)
+        contracts = self._get_contracts()
+        usdc_contract_address = self._web3.to_checksum_address(contracts.core.usdc.address)
         usdc_contract = self._web3.eth.contract(
-            address=usdc_contract_address, abi=USDC_CONTRACT_ABI
+            address=usdc_contract_address, abi=contracts.core.usdc.abi
         )
         return self._build_and_send_transaction(
             usdc_contract.functions.transfer(
-                VAULT_CONTRACT_ADDRESS, int(amount * Decimal(10**6))
+                contracts.core.vault.address, int(amount * Decimal(10**6))
             )
         )
 
@@ -150,15 +208,16 @@ class PrimeDelta:
             withdrawal_id=withdrawal_id,
         )
 
-        vault_contract_address = self._web3.to_checksum_address(VAULT_CONTRACT_ADDRESS)
+        contracts = self._get_contracts()
+        vault_contract_address = self._web3.to_checksum_address(contracts.core.vault.address)
         vault_contract = self._web3.eth.contract(
-            address=vault_contract_address, abi=VAULT_CONTRACT_ABI
+            address=vault_contract_address, abi=contracts.core.vault.abi
         )
         return self._build_and_send_transaction(
             vault_contract.functions.withdraw(
                 {
-                    "token": USDC_CONTRACT_ADDRESS,
-                    "account": VAULT_CONTRACT_ADDRESS,
+                    "token": contracts.core.usdc.address,
+                    "account": contracts.core.vault.address,
                     "to": self._account.address,
                     "amount": int(withdrawal.amount * Decimal(10**6)),
                     "nonce": withdrawal_id,
@@ -177,11 +236,10 @@ class PrimeDelta:
             symbol=stock_symbol,
         )
 
-        factory_contract_address = self._web3.to_checksum_address(
-            FACTORY_CONTRACT_ADDRESS
-        )
+        factory = self._get_contracts().core.factory
+        factory_contract_address = self._web3.to_checksum_address(factory.address)
         factory_contract = self._web3.eth.contract(
-            address=factory_contract_address, abi=FACTORY_CONTRACT_ABI
+            address=factory_contract_address, abi=factory.abi
         )
         return self._build_and_send_transaction(
             factory_contract.functions.burnStocks(
@@ -215,11 +273,10 @@ class PrimeDelta:
             withdrawal_id=withdrawal_id,
         )
 
-        factory_contract_address = self._web3.to_checksum_address(
-            FACTORY_CONTRACT_ADDRESS
-        )
+        factory = self._get_contracts().core.factory
+        factory_contract_address = self._web3.to_checksum_address(factory.address)
         factory_contract = self._web3.eth.contract(
-            address=factory_contract_address, abi=FACTORY_CONTRACT_ABI
+            address=factory_contract_address, abi=factory.abi
         )
         return self._build_and_send_transaction(
             factory_contract.functions.mintStocks(
@@ -381,7 +438,60 @@ class PrimeDelta:
             symbols = list(self.stocks().keys())
         return self._primedelta_client.pyth_prices_stream(symbols)
 
-    def _build_and_send_transaction(self, contract_function: ContractFunction) -> str:
+    def swap_exact_input(
+        self,
+        symbol: str,
+        side: SwapSide,
+        amount_in: Decimal,
+        min_amount_out: Decimal,
+        deadline_seconds: int = 600,
+        pyth_value: int = 0,
+    ) -> str:
+        self._require_logged_in_and_did_minted()
+        return self._router_swapper.swap_exact_input(
+            symbol, side, amount_in, min_amount_out, deadline_seconds, pyth_value
+        )
+
+    def swap_exact_output(
+        self,
+        symbol: str,
+        side: SwapSide,
+        amount_out: Decimal,
+        max_amount_in: Decimal,
+        deadline_seconds: int = 600,
+        pyth_value: int = 0,
+    ) -> str:
+        self._require_logged_in_and_did_minted()
+        return self._router_swapper.swap_exact_output(
+            symbol, side, amount_out, max_amount_in, deadline_seconds, pyth_value
+        )
+
+    def add_liquidity(self, params: AddLiquidityParams) -> str:
+        self._require_logged_in_and_did_minted()
+        return self._handler_for(params.pool_type).add_liquidity(params)
+
+    def remove_liquidity(self, params: RemoveLiquidityParams) -> str:
+        return self._handler_for(params.pool_type).remove_liquidity(params)
+
+    def collect_fees(self, position_id: int) -> str:
+        self._require_logged_in_and_did_minted()
+        return self._amm_handler.collect_fees(position_id)
+
+    def _handler_for(self, pool_type: PoolType):
+        if pool_type == PoolType.PRICE_FEED:
+            return self._dclex_handler
+        if pool_type == PoolType.AMM:
+            return self._amm_handler
+        raise ValueError(f"Unknown pool type: {pool_type}")
+
+    def _require_logged_in_and_did_minted(self) -> None:
+        account_status = self._primedelta_client.get_account_status()
+        if account_status != AccountStatus.DID_MINTED:
+            raise AccountNotVerified()
+
+    def _build_and_send_transaction(
+        self, contract_function: ContractFunction, value: int = 0
+    ) -> str:
         transaction = contract_function.build_transaction(
             {
                 "from": self._account.address,
@@ -389,6 +499,7 @@ class PrimeDelta:
                 "nonce": self._web3.eth.get_transaction_count(
                     self._web3.to_checksum_address(self._account.address),
                 ),
+                "value": value,
             }
         )
         signed_transaction = self._account.sign_transaction(transaction)

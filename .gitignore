@@ -5,3 +5,5 @@ dist/
 .venv
 venv/
 .env
+.env.local
+.claude/settings.local.json

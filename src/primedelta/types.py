@@ -68,7 +68,8 @@ class Distribution:
 class DigitalIdentitySignature:
     signature: str
     nonce: str
-    nationality: str
+    data: str
+    is_pro: int
 
 
 @dataclass(frozen=True)
