@@ -22,8 +22,8 @@ for price in primedelta.prices_stream(["AAPL", "TSLA", "NVDA"]):
 
 # Authenticated stream — broker feed for verified accounts. `symbols` is
 # ignored on this path (the broker pushes everything the user is entitled to).
-primedelta.login()
-for price in primedelta.prices_stream():
-    print(f"{price.symbol}: {price.last_price} @ {price.timestamp}")
-    break
-primedelta.logout()
+# primedelta.login()
+# for price in primedelta.prices_stream():
+#     print(f"{price.symbol}: {price.last_price} @ {price.timestamp}")
+#     break
+# primedelta.logout()

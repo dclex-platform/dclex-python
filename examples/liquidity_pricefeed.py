@@ -1,11 +1,20 @@
+import os
 from decimal import Decimal
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 from primedelta import PrimeDelta, PriceFeedAddLiquidity, PriceFeedRemoveLiquidity
 
-my_private_key = "0x"
-web3_provider_url = "YOUR_WEB3_PROVIDER_URL"
+# Load .env.local if present (local stack), else .env (default/dev).
+_repo_root = Path(__file__).resolve().parents[1]
+_env_local = _repo_root / ".env.local"
+load_dotenv(_env_local if _env_local.exists() else _repo_root / ".env")
 
-primedelta = PrimeDelta(private_key=my_private_key, web3_provider_url=web3_provider_url)
+primedelta = PrimeDelta(
+    private_key=os.environ["PRIMEDELTA_TEST_PRIVATE_KEY"],
+    web3_provider_url=os.environ["PRIMEDELTA_PROVIDER_URL"],
+)
 primedelta.login()
 
 # Add liquidity to the AAPL DCLEX pricefeed pool.
