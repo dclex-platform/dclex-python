@@ -667,6 +667,20 @@ class PrimeDelta:
     def _build_and_send_transaction(
         self, contract_function: ContractFunction, value: int = 0
     ) -> str:
+        # Besu's "pending" nonce occasionally lags behind the actual account
+        # state after a fresh receipt, causing the next submission to land on
+        # an already-used nonce. Retry once after refreshing nonce from chain.
+        try:
+            return self._build_and_send_transaction_once(contract_function, value)
+        except TransactionFailed as e:
+            if "nonce too low" not in (e.reason or "").lower():
+                raise
+            self._next_nonce = None  # force re-query from chain
+            return self._build_and_send_transaction_once(contract_function, value)
+
+    def _build_and_send_transaction_once(
+        self, contract_function: ContractFunction, value: int = 0
+    ) -> str:
         fn_name = getattr(contract_function, "fn_name", None) or "<unknown>"
         to_address = getattr(contract_function, "address", None)
         try:

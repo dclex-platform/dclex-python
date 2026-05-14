@@ -40,6 +40,10 @@ INCLUDE_BRITTLE=0
 [ "${1-}" = "--include-brittle" ] && INCLUDE_BRITTLE=1
 
 STREAM_TIMEOUT_SECS=15
+# Settle between mutating examples — each example spins up a fresh PrimeDelta
+# whose initial nonce query can race with the previous example's mempool on
+# Besu PoA (the "pending" tag lags behind the actual confirmed nonce briefly).
+SETTLE_SECS=5
 PASS=0
 FAIL=0
 FAILED=()
@@ -91,7 +95,10 @@ run_stream() {
 }
 
 echo "==> safe terminating examples"
-for f in "${SAFE[@]}"; do run_terminating "$f"; done
+for f in "${SAFE[@]}"; do
+  run_terminating "$f"
+  sleep "$SETTLE_SECS"
+done
 
 echo
 echo "==> stream examples (cap ${STREAM_TIMEOUT_SECS}s)"
