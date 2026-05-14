@@ -18,54 +18,39 @@ from primedelta import (
     PriceFeedRemoveLiquidity,
     SwapSide,
 )
-from primedelta.contracts import Contracts
 from primedelta.types import AccountStatus
 
 from .conftest import wait_for_transaction
 
 
-def _skip_if_no_stock(primedelta_logged_in, symbol: str) -> None:
-    """Skip when the test account has no on-chain balance of `symbol`."""
-    contracts = primedelta_logged_in._get_contracts()
-    pool_info = contracts.pools.get(symbol)
-    if pool_info is None:
-        pytest.skip(f"Pool info missing for {symbol}")
-    stock_addr = primedelta_logged_in._web3.to_checksum_address(
-        pool_info.stock_token_address
+def _ensure_stock_balance(primedelta_logged_in, symbol: str, fallback_usdc: Decimal) -> None:
+    """Buy a small amount of `symbol` if the wallet has none."""
+    balance = primedelta_logged_in.get_onchain_stock_balance(symbol)
+    if balance > 0:
+        return
+    primedelta_logged_in.swap_exact_input(
+        symbol,
+        SwapSide.USDC_TO_STOCK,
+        amount_in=fallback_usdc,
+        min_amount_out=Decimal("0"),
     )
-    erc20 = primedelta_logged_in._web3.eth.contract(
-        address=stock_addr,
-        abi=[
-            {
-                "name": "balanceOf",
-                "type": "function",
-                "stateMutability": "view",
-                "inputs": [{"name": "owner", "type": "address"}],
-                "outputs": [{"name": "", "type": "uint256"}],
-            }
-        ],
-    )
-    balance = erc20.functions.balanceOf(
-        primedelta_logged_in._account.address
-    ).call()
-    if balance == 0:
-        pytest.skip(f"Test account has no {symbol} balance — fund it to run this test")
 
 
 @pytest.mark.integration
-class TestContractsEndpoint:
-    def test_contracts_payload_parses(self, primedelta):
-        payload = primedelta._primedelta_client.get_contracts()
-        contracts = Contracts.from_dict(payload)
+class TestContractsRegistry:
+    def test_bundled_dev_config_is_complete(self, primedelta):
+        contracts = primedelta._get_contracts()
         assert contracts.chain_id > 0
         assert contracts.core.usdc.address.startswith("0x")
         assert contracts.core.factory.address.startswith("0x")
         assert contracts.core.digital_identity.address.startswith("0x")
-        # Router and NPM are optional but should be present once deployed
-        if contracts.core.dex_router is not None:
-            assert contracts.core.dex_router.address.startswith("0x")
+        assert contracts.core.dex_router is not None
+        assert contracts.core.position_manager is not None
+        # Pool ABIs the DEX flow needs:
+        for key in ("erc20", "univ3_factory", "dclex_pool", "univ3_pool"):
+            assert key in contracts.pool_abis, f"missing pool ABI: {key}"
 
-    def test_lazy_load_caches(self, primedelta):
+    def test_get_contracts_returns_same_instance(self, primedelta):
         first = primedelta._get_contracts()
         second = primedelta._get_contracts()
         assert first is second
@@ -124,12 +109,6 @@ class TestSwapLive:
     def test_buy_small_amount_of_stock(
         self, primedelta_logged_in, test_symbol, provider_url
     ):
-        contracts = primedelta_logged_in._get_contracts()
-        if contracts.core.dex_router is None:
-            pytest.skip("DCLEX router not deployed on target backend")
-        if test_symbol not in contracts.pools:
-            pytest.skip(f"Pool not registered for {test_symbol}")
-
         tx_hash = primedelta_logged_in.swap_exact_input(
             test_symbol,
             SwapSide.USDC_TO_STOCK,
@@ -142,12 +121,10 @@ class TestSwapLive:
     def test_sell_small_amount_of_stock(
         self, primedelta_logged_in, test_symbol, provider_url
     ):
-        contracts = primedelta_logged_in._get_contracts()
-        if contracts.core.dex_router is None:
-            pytest.skip("DCLEX router not deployed on target backend")
-        if test_symbol not in contracts.pools:
-            pytest.skip(f"Pool not registered for {test_symbol}")
-        _skip_if_no_stock(primedelta_logged_in, test_symbol)
+        # Ensure the wallet has something to sell — auto-fund via swap.
+        _ensure_stock_balance(
+            primedelta_logged_in, test_symbol, fallback_usdc=Decimal("2")
+        )
 
         tx_hash = primedelta_logged_in.swap_exact_input(
             test_symbol,
@@ -167,12 +144,10 @@ class TestLiquidityLive:
     def test_add_then_remove_pricefeed_liquidity(
         self, primedelta_logged_in, test_symbol, provider_url
     ):
-        contracts = primedelta_logged_in._get_contracts()
-        if contracts.core.dex_router is None:
-            pytest.skip("DCLEX router not deployed on target backend")
-        if test_symbol not in contracts.pools:
-            pytest.skip(f"Pool not registered for {test_symbol}")
-        _skip_if_no_stock(primedelta_logged_in, test_symbol)
+        # Pool needs the wallet to hold both legs; top up stock side via swap.
+        _ensure_stock_balance(
+            primedelta_logged_in, test_symbol, fallback_usdc=Decimal("30")
+        )
 
         liquidity_amount = Decimal(10**15)  # 0.001 LP shares (assuming 18-dec)
 

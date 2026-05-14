@@ -49,9 +49,14 @@ def test_private_key():
 
 @pytest.fixture(scope="session")
 def unverified_private_key():
+    """A wallet without DID — generated fresh if not provided via env.
+
+    DID-gated tests only check that the SDK raises AccountNotVerified before
+    submitting any tx, so the wallet doesn't need on-chain funds.
+    """
     key = os.getenv("PRIMEDELTA_UNVERIFIED_PRIVATE_KEY")
     if not key:
-        pytest.skip("PRIMEDELTA_UNVERIFIED_PRIVATE_KEY not set in .env")
+        key = Web3().eth.account.create().key.hex()
     return key
 
 

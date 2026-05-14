@@ -98,14 +98,17 @@ class TestOrderPlacementIntegration:
         # Cancel the order
         primedelta_logged_in.cancel_order(order_id)
 
-        # Wait for cancellation to process and verify
-        for _ in range(5):
+        # Wait for cancellation to process and verify — backend can take
+        # several seconds to flip the order's state on dev.
+        for _ in range(60):
             time.sleep(0.5)
             status = primedelta_logged_in.get_order_status(order_id)
             if status == OrderStatus.CANCELED:
                 break
 
-        assert status == OrderStatus.CANCELED
+        assert status == OrderStatus.CANCELED, (
+            f"order {order_id} did not reach CANCELED within 30s, last status={status}"
+        )
 
 
 @pytest.mark.integration
