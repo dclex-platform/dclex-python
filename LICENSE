@@ -1,9 +1,9 @@
 Prime Delta API Non-Commercial License
 
-This Prime Delta API Non-Commercial License ("License") is an agreement between Prime Delta inc. ("Prime Delta") and You, and governs Your use of the API Code. By loging to your Prime Delta account programmatically , you acknowledge that You consent to be legally bound by this Agreement.
+This Prime Delta API Non-Commercial License ("License") is an agreement between Prime Delta inc. ("Prime Delta") and You, and governs Your use of the API Code. By logging in to your Prime Delta account programmatically, you acknowledge that You consent to be legally bound by this Agreement.
 
 1. Introduction.
-1.1 Prime Delta has developed application program interface ("API") code to permit its customers to use their own internal proprietary software tools in managing their accounts with Prime Delta. This License is intended only for users who wish to use the API Code by itself as is, or in connection with or for the development of their own internal proprietary tools to manage their own Prime Delta accounts. This License is NOT for anybody who is developing software applications that they wish to: (a) sell to third party users for a fee, or (b) give to third party users to generate an indirect financial benefit (e.g., commissions). If You wish to make a software application for the purposes described in the preceding sentence then please us at info@primedelta.io.
+1.1 Prime Delta has developed application program interface ("API") code to permit its customers to use their own internal proprietary software tools in managing their accounts with Prime Delta. This License is intended only for users who wish to use the API Code by itself as is, or in connection with or for the development of their own internal proprietary tools to manage their own Prime Delta accounts. This License is NOT for anybody who is developing software applications that they wish to: (a) sell to third party users for a fee, or (b) give to third party users to generate an indirect financial benefit (e.g., commissions). If You wish to make a software application for the purposes described in the preceding sentence then please contact us at info@primedelta.io.
 
 2. Definitions.
 2.1. "API Code" means the client code for Prime Delta API that is made available to You.
