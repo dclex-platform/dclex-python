@@ -11,7 +11,9 @@ from primedelta import (
     PriceFeedAddLiquidity,
     PriceFeedRemoveLiquidity,
     SwapSide,
+    TransactionFailed,
 )
+from primedelta.primedelta import _decode_revert
 from primedelta.contracts import (
     ContractRef,
     Contracts,
@@ -24,6 +26,7 @@ from primedelta.dex.handlers import (
     RouterNotConfigured,
     _AMMPoolHandler,
     _DclexPoolHandler,
+    _resolve_stock_token,
     _RouterSwapHandler,
 )
 from primedelta.types import AccountStatus
@@ -57,12 +60,16 @@ def _contracts(*, with_router: bool = True, with_npm: bool = True) -> Contracts:
     return Contracts(
         chain_id=31337,
         core=core,
-        pool_abis={"dclex_pool": [], "univ3_pool": []},
+        pool_abis={
+            "dclex_pool": [],
+            "univ3_pool": [],
+            "univ3_factory": [],
+            "erc20": [],
+        },
         pools={
             "AAPL": StockPools(
                 symbol="AAPL",
                 stock_token_address=_AAPL_TOKEN,
-                pool_addresses=[_DCLEX_POOL, _AMM_POOL],
             ),
         },
     )
@@ -300,7 +307,8 @@ class TestAMMHandlerLiquidity:
         contract = MagicMock()
         web3.eth.contract.return_value = contract
 
-        contract.functions.stockToAMMPool.return_value.call.return_value = _AMM_POOL
+        contract.functions.factory.return_value.call.return_value = "0x" + "F" * 40
+        contract.functions.getPool.return_value.call.return_value = _AMM_POOL
         contract.functions.token0.return_value.call.return_value = token0
         contract.functions.token1.return_value.call.return_value = token1
         contract.functions.fee.return_value.call.return_value = fee
@@ -520,3 +528,167 @@ class TestAuthGates:
         ):
             with pytest.raises(AccountNotVerified):
                 primedelta.collect_fees(1)
+
+
+class TestResolveStockToken:
+    def test_returns_address_from_backend_pools_without_calling_chain(self):
+        web3 = _make_web3_mock()
+        addr = _resolve_stock_token(web3, _contracts(), "AAPL")
+        assert addr == _AAPL_TOKEN
+        # No on-chain contract construction needed for the fast path.
+        web3.eth.contract.assert_not_called()
+
+    def test_falls_back_to_router_when_symbol_missing_from_backend(self):
+        web3 = _make_web3_mock()
+        ammt1_addr = "0x" + "7" * 40
+        other_addr = "0x" + "8" * 40
+
+        contracts_by_addr = {}
+
+        def make_contract(address, abi):
+            contract = contracts_by_addr.setdefault(address, MagicMock())
+            if address == _ROUTER_ADDRESS:
+                contract.functions.allStockTokens.return_value.call.return_value = [
+                    other_addr,
+                    ammt1_addr,
+                ]
+            elif address == other_addr:
+                contract.functions.symbol.return_value.call.return_value = "OTHER"
+            elif address == ammt1_addr:
+                contract.functions.symbol.return_value.call.return_value = "AMMT1"
+            return contract
+
+        web3.eth.contract.side_effect = make_contract
+
+        addr = _resolve_stock_token(web3, _contracts(), "AMMT1")
+        assert addr == ammt1_addr
+
+    def test_raises_pool_not_found_when_router_unconfigured_and_symbol_missing(self):
+        web3 = _make_web3_mock()
+        with pytest.raises(PoolNotFound):
+            _resolve_stock_token(web3, _contracts(with_router=False), "AMMT1")
+
+    def test_raises_pool_not_found_when_router_has_no_matching_symbol(self):
+        web3 = _make_web3_mock()
+        other_addr = "0x" + "8" * 40
+
+        def make_contract(address, abi):
+            contract = MagicMock()
+            if address == _ROUTER_ADDRESS:
+                contract.functions.allStockTokens.return_value.call.return_value = [
+                    other_addr,
+                ]
+            elif address == other_addr:
+                contract.functions.symbol.return_value.call.return_value = "OTHER"
+            return contract
+
+        web3.eth.contract.side_effect = make_contract
+
+        with pytest.raises(PoolNotFound):
+            _resolve_stock_token(web3, _contracts(), "AMMT1")
+
+
+class TestDecodeRevert:
+    def test_decodes_error_string(self):
+        from web3.exceptions import ContractLogicError
+
+        # `Error("not enough USDC")` ABI-encoded.
+        # selector 08c379a0 + offset(32B=0x20) + length(0x0f) + "not enough USDC" padded
+        data = (
+            "0x08c379a0"
+            "0000000000000000000000000000000000000000000000000000000000000020"
+            "000000000000000000000000000000000000000000000000000000000000000f"
+            "6e6f7420656e6f7567682055534443" + "00" * 17
+        )
+        err = ContractLogicError("execution reverted", data=data)
+        assert _decode_revert(err) == "Error('not enough USDC')"
+
+    def test_decodes_panic(self):
+        from web3.exceptions import ContractLogicError
+
+        # Panic(0x11) — arithmetic overflow
+        data = (
+            "0x4e487b71"
+            "0000000000000000000000000000000000000000000000000000000000000011"
+        )
+        err = ContractLogicError("execution reverted", data=data)
+        assert _decode_revert(err) == "Panic(0x11)"
+
+    def test_returns_raw_data_for_unknown_selector(self):
+        from web3.exceptions import ContractLogicError
+
+        data = "0xdeadbeef0011"
+        err = ContractLogicError("execution reverted", data=data)
+        assert _decode_revert(err) == f"raw_data={data}"
+
+    def test_falls_back_to_message_when_no_data(self):
+        from web3.exceptions import ContractLogicError
+
+        err = ContractLogicError("explicit message")
+        assert "explicit message" in _decode_revert(err)
+
+
+class TestBuildAndSendTransaction:
+    def _make_pd_with_fresh_web3(self) -> PrimeDelta:
+        pd = _make_primedelta()
+        # Replace the lazy auto-mock with a fresh MagicMock we control end-to-end.
+        pd._web3 = MagicMock()
+        pd._web3.to_checksum_address.side_effect = lambda a: a
+        pd._account = MagicMock()
+        pd._account.address = _USER_ADDRESS
+        pd._account.sign_transaction.return_value.rawTransaction = b"\x00"
+        return pd
+
+    def test_raises_transaction_failed_on_pre_submit_revert(self):
+        from web3.exceptions import ContractLogicError
+
+        pd = self._make_pd_with_fresh_web3()
+        fn = MagicMock()
+        fn.fn_name = "approve"
+        fn.build_transaction.side_effect = ContractLogicError(
+            "execution reverted",
+            data=(
+                "0x08c379a0"
+                "0000000000000000000000000000000000000000000000000000000000000020"
+                "0000000000000000000000000000000000000000000000000000000000000007"
+                "62616420736967" + "00" * 25
+            ),
+        )
+
+        with pytest.raises(TransactionFailed) as info:
+            pd._build_and_send_transaction(fn)
+
+        assert info.value.function_name == "approve"
+        assert info.value.tx_hash is None
+        assert "Error('bad sig')" in info.value.reason
+
+    def test_raises_transaction_failed_when_receipt_status_zero(self):
+        from web3.exceptions import ContractLogicError
+
+        pd = self._make_pd_with_fresh_web3()
+        fn = MagicMock()
+        fn.fn_name = "buyExactInput"
+        fn.build_transaction.return_value = {"to": "0x0"}
+        # Submission succeeds.
+        sent_hash = MagicMock()
+        sent_hash.hex.return_value = "0xabc"
+        pd._web3.eth.send_raw_transaction.return_value = sent_hash
+        pd._web3.eth.wait_for_transaction_receipt.return_value = {
+            "status": 0,
+            "blockNumber": 99,
+        }
+        # Re-running as eth_call reveals the reason.
+        pd._web3.eth.call.side_effect = ContractLogicError(
+            "execution reverted",
+            data="0x08c379a0"
+            "0000000000000000000000000000000000000000000000000000000000000020"
+            "0000000000000000000000000000000000000000000000000000000000000003"
+            "626164" + "00" * 29,
+        )
+
+        with pytest.raises(TransactionFailed) as info:
+            pd._build_and_send_transaction(fn)
+
+        assert info.value.function_name == "buyExactInput"
+        assert info.value.tx_hash == "0xabc"
+        assert "Error('bad')" in info.value.reason

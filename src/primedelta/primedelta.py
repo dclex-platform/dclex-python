@@ -1,11 +1,14 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 
 from eth_account.messages import encode_defunct
 from siwe import SiweMessage
+from eth_abi import decode as abi_decode
 from web3 import Web3
 from web3.contract.contract import ContractFunction
+from web3.exceptions import ContractLogicError
+from web3.middleware import geth_poa_middleware
 
 from primedelta.contracts import Contracts
 from primedelta.dex.handlers import (
@@ -34,6 +37,7 @@ from primedelta.types import (
     AccountStatus,
     ClaimableWithdrawal,
     Distribution,
+    LPPosition,
     Order,
     OrderSide,
     OrderStatus,
@@ -59,12 +63,124 @@ class WithdrawalNotFound(Exception):
     pass
 
 
+class TransactionFailed(Exception):
+    """A transaction submitted by the SDK reverted or failed to mine.
+
+    Attributes:
+        function_name: Solidity function the SDK tried to call.
+        reason: Decoded revert reason if available (Error(string) or
+            Panic(uint256)), otherwise the raw return data or original message.
+        tx_hash: Hex-encoded tx hash if the transaction was submitted. None
+            when the failure happened during pre-submit gas estimation.
+        to: Target contract address (when known) — useful for replay via
+            `cast call <to> <data> --from <sender> --rpc-url ...`.
+        data: ABI-encoded calldata (when known) — pair with `to` to replay
+            the failing call in a debugger / block explorer.
+        trace: Best-effort `debug_traceCall` output if the node supports it.
+    """
+
+    def __init__(
+        self,
+        function_name: str,
+        reason: str,
+        tx_hash: Optional[str] = None,
+        to: Optional[str] = None,
+        data: Optional[str] = None,
+        trace: Optional[Any] = None,
+    ) -> None:
+        self.function_name = function_name
+        self.reason = reason
+        self.tx_hash = tx_hash
+        self.to = to
+        self.data = data
+        self.trace = trace
+        parts = [f"{function_name}() reverted"]
+        if tx_hash is not None:
+            parts.append(f"tx_hash={tx_hash}")
+        if to is not None:
+            parts.append(f"to={to}")
+        if data is not None:
+            # Show the 4-byte selector + a short prefix so the line stays readable;
+            # the full calldata is on `.data` for programmatic access.
+            parts.append(
+                f"selector={data[:10]} calldata_len={(len(data) - 2) // 2}B"
+            )
+        parts.append(f"reason={reason}")
+        super().__init__("; ".join(parts))
+
+
+_ERROR_STRING_SELECTOR = "0x08c379a0"
+_PANIC_SELECTOR = "0x4e487b71"
+
+
+def _decode_revert(err: Exception) -> str:
+    """Best-effort extraction of a human-readable revert reason."""
+    data = getattr(err, "data", None)
+    if isinstance(data, str) and data not in ("", "0x"):
+        if data.startswith(_ERROR_STRING_SELECTOR):
+            try:
+                decoded = abi_decode(["string"], bytes.fromhex(data[10:]))[0]
+                return f"Error({decoded!r})"
+            except Exception:
+                pass
+        if data.startswith(_PANIC_SELECTOR):
+            try:
+                code = abi_decode(["uint256"], bytes.fromhex(data[10:]))[0]
+                return f"Panic(0x{code:x})"
+            except Exception:
+                pass
+        return f"raw_data={data}"
+    message = getattr(err, "message", None)
+    return message or str(err) or "no reason given"
+
+
+def _deepest_trace_error(trace: Any) -> Optional[str]:
+    """Walk a `debug_traceCall` (callTracer) tree and return the innermost error.
+
+    Top-level callers report a generic "execution reverted"; the actual cause
+    (e.g. "insufficient balance for transfer") often lives in a nested sub-call.
+    """
+    if not trace:
+        return None
+    deepest = None
+    stack = [trace]
+    while stack:
+        node = stack.pop()
+        err = None
+        if hasattr(node, "get"):
+            err = node.get("error")
+            calls = node.get("calls") or []
+        else:
+            err = getattr(node, "error", None)
+            calls = getattr(node, "calls", None) or []
+        if err:
+            deepest = err
+        stack.extend(calls)
+    return deepest
+
+
 class PrimeDelta:
-    def __init__(self, private_key: str, web3_provider_url: str) -> None:
+    def __init__(
+        self,
+        private_key: str,
+        web3_provider_url: str,
+        network: str = "dev",
+    ) -> None:
         self._account = Web3().eth.account.from_key(private_key)
         self._web3 = Web3(Web3.HTTPProvider(web3_provider_url))
+        # Besu IBFT / Clique chains pack signer info into a 241-byte extraData
+        # field; web3.py's default response formatter rejects anything > 32B.
+        # Injecting the PoA middleware is a no-op on non-PoA chains.
+        self._web3.middleware_onion.inject(geth_poa_middleware, layer=0)
         self._primedelta_client = PrimeDeltaClient()
-        self._contracts: Optional[Contracts] = None
+        # Contracts come from the SDK's bundled `networks/<name>.json` — not
+        # from the backend. Pin addresses by editing that file.
+        from primedelta import networks
+        self._contracts: Contracts = networks.load(network)
+        # Some Besu/PoA RPC nodes lag in updating the nonce counter even after
+        # the previous tx's receipt is back. Track locally to avoid collisions
+        # in chained submissions (e.g. approve → swap, mint → remove).
+        self._next_nonce: Optional[int] = None
         self._dclex_handler = _DclexPoolHandler(
             web3=self._web3,
             account=self._account,
@@ -86,10 +202,6 @@ class PrimeDelta:
         )
 
     def _get_contracts(self) -> Contracts:
-        if self._contracts is None:
-            self._contracts = Contracts.from_dict(
-                self._primedelta_client.get_contracts()
-            )
         return self._contracts
 
     def login(self) -> None:
@@ -338,6 +450,31 @@ class PrimeDelta:
                 return stock_item.available_to_sell
         return Decimal(0)
 
+    def get_onchain_usdc_balance(self) -> Decimal:
+        """Read USDC balance from chain (bypasses backend indexer lag)."""
+        usdc = self._get_contracts().core.usdc
+        token = self._web3.eth.contract(
+            address=self._web3.to_checksum_address(usdc.address), abi=usdc.abi
+        )
+        raw = token.functions.balanceOf(self._account.address).call()
+        return Decimal(raw) / Decimal(10**6)
+
+    def get_onchain_stock_balance(self, symbol: str) -> Decimal:
+        """Read a stock token balance from chain (bypasses backend indexer lag).
+
+        Useful immediately after a swap when the backend hasn't synced yet.
+        """
+        from primedelta.dex.handlers import _require_pool_abi, _resolve_stock_token
+
+        contracts = self._get_contracts()
+        stock_addr = _resolve_stock_token(self._web3, contracts, symbol)
+        token = self._web3.eth.contract(
+            address=self._web3.to_checksum_address(stock_addr),
+            abi=_require_pool_abi(contracts, "erc20"),
+        )
+        raw = token.functions.balanceOf(self._account.address).call()
+        return Decimal(raw) / Decimal(10**18)
+
     def portfolio(self) -> Portfolio:
         try:
             return self._primedelta_client.portfolio()
@@ -477,6 +614,44 @@ class PrimeDelta:
         self._require_logged_in_and_did_minted()
         return self._amm_handler.collect_fees(position_id)
 
+    def lp_positions(self) -> list[int]:
+        """Return all AMM (V3) position NFT token IDs owned by the wallet."""
+        npm = self._npm_contract()
+        count = npm.functions.balanceOf(self._account.address).call()
+        return [
+            npm.functions.tokenOfOwnerByIndex(
+                self._account.address, i
+            ).call()
+            for i in range(count)
+        ]
+
+    def lp_position(self, position_id: int) -> LPPosition:
+        """Read AMM (V3) position info for a given NFT token ID."""
+        npm = self._npm_contract()
+        p = npm.functions.positions(position_id).call()
+        return LPPosition(
+            token_id=position_id,
+            token0=p[2],
+            token1=p[3],
+            fee=p[4],
+            tick_lower=p[5],
+            tick_upper=p[6],
+            liquidity=p[7],
+            tokens_owed_0=p[10],
+            tokens_owed_1=p[11],
+        )
+
+    def _npm_contract(self):
+        from primedelta.dex.handlers import PositionManagerNotConfigured
+
+        npm_ref = self._get_contracts().core.position_manager
+        if npm_ref is None:
+            raise PositionManagerNotConfigured()
+        return self._web3.eth.contract(
+            address=self._web3.to_checksum_address(npm_ref.address),
+            abi=npm_ref.abi,
+        )
+
     def _handler_for(self, pool_type: PoolType):
         if pool_type == PoolType.PRICE_FEED:
             return self._dclex_handler
@@ -492,20 +667,109 @@ class PrimeDelta:
     def _build_and_send_transaction(
         self, contract_function: ContractFunction, value: int = 0
     ) -> str:
-        transaction = contract_function.build_transaction(
-            {
-                "from": self._account.address,
-                "gasPrice": self._web3.eth.gas_price,
-                "nonce": self._web3.eth.get_transaction_count(
-                    self._web3.to_checksum_address(self._account.address),
-                ),
-                "value": value,
-            }
-        )
+        fn_name = getattr(contract_function, "fn_name", None) or "<unknown>"
+        to_address = getattr(contract_function, "address", None)
+        try:
+            calldata = contract_function._encode_transaction_data()
+        except Exception:
+            calldata = None
+        tx_params = {
+            "from": self._account.address,
+            "gasPrice": self._web3.eth.gas_price,
+            "nonce": self._reserve_nonce(),
+            "value": value,
+            # Pre-set a generous gas limit; chain refunds unused. Skipping the
+            # automatic `estimate_gas` step avoids a Besu race where the node
+            # advances the account nonce during simulation, causing the next
+            # submission to be rejected as "nonce too low".
+            "gas": 5_000_000,
+        }
+        # Pre-submit revert (gas estimation): no tx_hash exists yet.
+        try:
+            transaction = contract_function.build_transaction(tx_params)
+        except ContractLogicError as e:
+            # Don't burn this nonce — the tx never went out.
+            self._next_nonce = None
+            trace = self._try_debug_trace_call(
+                {
+                    "from": self._account.address,
+                    "to": to_address,
+                    "data": calldata,
+                    "value": hex(value) if value else "0x0",
+                }
+            )
+            reason = _decode_revert(e)
+            deepest = _deepest_trace_error(trace)
+            if deepest and deepest != reason and "revert" in reason.lower():
+                reason = f"{deepest} (top-level: {reason})"
+            raise TransactionFailed(
+                fn_name,
+                reason,
+                to=to_address,
+                data=calldata,
+                trace=trace,
+            ) from e
+
         signed_transaction = self._account.sign_transaction(transaction)
-        return self._web3.eth.send_raw_transaction(
+        tx_hash = self._web3.eth.send_raw_transaction(
             signed_transaction.rawTransaction
-        ).hex()
+        )
+        # Wait for the receipt so chained calls (e.g. approve → swap) see the
+        # state change. Without this the next tx's gas estimation runs against
+        # pre-approve state on chains with real block time (dev/prod), reverting.
+        receipt = self._web3.eth.wait_for_transaction_receipt(tx_hash)
+        if receipt["status"] == 0:
+            # Re-run as eth_call at the mined block to extract the revert reason.
+            reason = "reverted with no reason"
+            try:
+                self._web3.eth.call(transaction, receipt["blockNumber"])
+            except ContractLogicError as e:
+                reason = _decode_revert(e)
+            except Exception as e:
+                reason = str(e)
+            trace = self._try_debug_trace_call(transaction)
+            deepest = _deepest_trace_error(trace)
+            if deepest and deepest != reason and "revert" in reason.lower():
+                reason = f"{deepest} (top-level: {reason})"
+            raise TransactionFailed(
+                fn_name,
+                reason,
+                tx_hash=tx_hash.hex(),
+                to=to_address,
+                data=calldata,
+                trace=trace,
+            )
+        return tx_hash.hex()
+
+    def _reserve_nonce(self) -> int:
+        """Return the next nonce to use.
+
+        Queries chain via `eth_getTransactionCount(pending)` each time. If the
+        chain's view hasn't caught up since our last submission (some Besu/PoA
+        nodes lag), bump past our last-used value. Never goes backwards.
+        """
+        chain_nonce = self._web3.eth.get_transaction_count(
+            self._web3.to_checksum_address(self._account.address),
+            "pending",
+        )
+        if self._next_nonce is not None and chain_nonce <= self._next_nonce:
+            chain_nonce = self._next_nonce + 1
+        self._next_nonce = chain_nonce
+        return chain_nonce
+
+    def _try_debug_trace_call(self, tx: dict) -> Optional[Any]:
+        """Attempt `debug_traceCall` for a richer call trace.
+
+        Many public RPCs disable this. We swallow any failure so error
+        reporting never raises a second exception.
+        """
+        try:
+            return self._web3.manager.request_blocking(
+                "debug_traceCall",
+                [tx, "latest", {"tracer": "callTracer"}],
+            )
+        except Exception:
+            return None
 
     def is_market_open(self) -> bool:
         return self._primedelta_client.is_market_open()

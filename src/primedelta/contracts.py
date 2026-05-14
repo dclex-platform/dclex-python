@@ -20,6 +20,7 @@ class CoreContracts:
     digital_identity: ContractRef
     dex_router: Optional[ContractRef] = None
     position_manager: Optional[ContractRef] = None
+    oracle: Optional[ContractRef] = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CoreContracts":
@@ -38,6 +39,11 @@ class CoreContracts:
                 if data.get("positionManager") and data["positionManager"].get("address")
                 else None
             ),
+            oracle=(
+                ContractRef.from_dict(data["oracle"])
+                if data.get("oracle") and data["oracle"].get("address")
+                else None
+            ),
         )
 
 
@@ -45,14 +51,12 @@ class CoreContracts:
 class StockPools:
     symbol: str
     stock_token_address: str
-    pool_addresses: list[str]
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "StockPools":
         return cls(
             symbol=data["symbol"],
             stock_token_address=data["stockTokenAddress"],
-            pool_addresses=list(data["poolAddresses"]),
         )
 
 

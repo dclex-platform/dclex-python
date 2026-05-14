@@ -137,3 +137,18 @@ class Price:
     last_price: Decimal
     timestamp: datetime
     percentage_change: Decimal
+
+
+@dataclass(frozen=True)
+class LPPosition:
+    """Uniswap V3 NonfungiblePositionManager position info."""
+
+    token_id: int
+    token0: str
+    token1: str
+    fee: int
+    tick_lower: int
+    tick_upper: int
+    liquidity: int
+    tokens_owed_0: int
+    tokens_owed_1: int

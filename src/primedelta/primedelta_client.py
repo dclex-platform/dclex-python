@@ -54,12 +54,6 @@ class PrimeDeltaClient:
         response.raise_for_status()
         return response.json()["nonce"]
 
-    @staticmethod
-    def get_contracts() -> dict:
-        response = requests.get(f"{PRIMEDELTA_BASE_URL}/contracts/")
-        response.raise_for_status()
-        return response.json()
-
     def login(self, message: str, signature: str, nonce: str) -> None:
         response = requests.post(
             f"{PRIMEDELTA_BASE_URL}/users/verify/",

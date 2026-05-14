@@ -46,12 +46,10 @@ def _payload_with_pools() -> dict:
             {
                 "symbol": "AAPL",
                 "stockTokenAddress": "0xAAPL",
-                "poolAddresses": ["0xAAPL_PF", "0xAAPL_AMM"],
             },
             {
                 "symbol": "TSLA",
                 "stockTokenAddress": "0xTSLA",
-                "poolAddresses": ["0xTSLA_PF"],
             },
         ],
     }
@@ -106,7 +104,6 @@ class TestPoolParsing:
         assert set(contracts.pools) == {"AAPL", "TSLA"}
         aapl = contracts.pools["AAPL"]
         assert aapl.stock_token_address == "0xAAPL"
-        assert aapl.pool_addresses == ["0xAAPL_PF", "0xAAPL_AMM"]
 
     def test_pool_abis_passed_through(self):
         contracts = Contracts.from_dict(_payload_with_pools())
@@ -121,31 +118,25 @@ class TestPoolParsing:
 
 
 class TestPrimeDeltaContractsLoading:
-    def test_lazy_fetch_and_cache(self):
+    def test_loads_dev_network_by_default(self):
         with patch("primedelta.primedelta.Web3"):
             primedelta = PrimeDelta(
                 private_key="0x" + "1" * 64,
                 web3_provider_url="http://localhost:8545",
             )
 
-        with patch.object(
-            primedelta._primedelta_client,
-            "get_contracts",
-            return_value=_sample_payload(),
-        ) as mock_fetch:
-            first = primedelta._get_contracts()
-            second = primedelta._get_contracts()
+        contracts = primedelta._get_contracts()
+        assert isinstance(contracts, Contracts)
+        assert contracts.chain_id == 2028  # value pinned in networks/dev.json
+        assert contracts.core.dex_router is not None
+        # Pools are discovered on-chain — the local config doesn't ship a list.
+        assert contracts.pools == {}
 
-        assert first is second
-        assert isinstance(first, Contracts)
-        assert first.chain_id == 2028
-        mock_fetch.assert_called_once()
-
-    def test_initial_state_is_unloaded(self):
+    def test_unknown_network_raises(self):
         with patch("primedelta.primedelta.Web3"):
-            primedelta = PrimeDelta(
-                private_key="0x" + "1" * 64,
-                web3_provider_url="http://localhost:8545",
-            )
-
-        assert primedelta._contracts is None
+            with pytest.raises(ValueError):
+                PrimeDelta(
+                    private_key="0x" + "1" * 64,
+                    web3_provider_url="http://localhost:8545",
+                    network="does-not-exist",
+                )

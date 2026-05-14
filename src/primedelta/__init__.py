@@ -16,6 +16,7 @@ from .primedelta import (
     DigitalIdentityAlreadyClaimed,
     NotEnoughFunds,
     PrimeDelta,
+    TransactionFailed,
 )
 from .primedelta_client import NotLoggedIn, UserSignedMessageVerificationError
 from .types import *
