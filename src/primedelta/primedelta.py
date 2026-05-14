@@ -441,13 +441,13 @@ class PrimeDelta:
     def get_stock_available_balance(self, symbol: str) -> Decimal:
         for stock_item in self._primedelta_client.portfolio().positions:
             if stock_item.symbol == symbol:
-                return stock_item.total_owned
+                return stock_item.available_to_sell
         return Decimal(0)
 
     def get_stock_total_balance(self, symbol: str) -> Decimal:
         for stock_item in self._primedelta_client.portfolio().positions:
             if stock_item.symbol == symbol:
-                return stock_item.available_to_sell
+                return stock_item.total_owned
         return Decimal(0)
 
     def get_onchain_usdc_balance(self) -> Decimal:
