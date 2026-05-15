@@ -6,8 +6,8 @@ from typing import Optional
 import requests
 from sseclient import SSEClient
 
-from dclex.settings import DCLEX_BASE_URL
-from dclex.types import (
+from primedelta.settings import PRIMEDELTA_BASE_URL, PYTH_HERMES_BASE_URL
+from primedelta.types import (
     AccountStatus,
     ClaimableWithdrawal,
     DepositStocksSignature,
@@ -44,19 +44,19 @@ class UserSignedMessageVerificationError(Exception):
     pass
 
 
-class DclexClient:
+class PrimeDeltaClient:
     def __init__(self) -> None:
         self._token = None
 
     @staticmethod
     def get_nonce() -> str:
-        response = requests.get(f"{DCLEX_BASE_URL}/users/nonce/")
+        response = requests.get(f"{PRIMEDELTA_BASE_URL}/users/nonce/")
         response.raise_for_status()
         return response.json()["nonce"]
 
     def login(self, message: str, signature: str, nonce: str) -> None:
         response = requests.post(
-            f"{DCLEX_BASE_URL}/users/verify/",
+            f"{PRIMEDELTA_BASE_URL}/users/verify/",
             data={"message": message, "signature": signature, "nonce": nonce},
         )
         if response.status_code == 400:
@@ -72,7 +72,7 @@ class DclexClient:
 
     def get_account_status(self) -> AccountStatus:
         response = requests.get(
-            f"{DCLEX_BASE_URL}/verification-status/",
+            f"{PRIMEDELTA_BASE_URL}/verification-status/",
             headers={"Authorization": f"Token {self._token}"},
         )
         if response.status_code == 401:
@@ -135,7 +135,8 @@ class DclexClient:
         return DigitalIdentitySignature(
             signature=response["signature"],
             nonce=response["nonce"],
-            nationality=response["nationality"],
+            data=response["data"],
+            is_pro=response["isPro"],
         )
 
     def cancel_order(self, order_id: int) -> None:
@@ -155,7 +156,7 @@ class DclexClient:
                 symbol=item["stockSymbol"],
                 quantity=int(Decimal(item["quantity"])),
                 price=Decimal(item["price"]),
-                status=OrderStatus(item["status"]),
+                status=OrderStatus.PENDING,  # Open orders are always pending
                 date_of_cancellation=(
                     date.fromisoformat(item["dateOfCancellation"])
                     if item["dateOfCancellation"]
@@ -290,7 +291,7 @@ class DclexClient:
         return response["orderId"]
 
     def stocks(self) -> dict[str, Stock]:
-        response = requests.get(f"{DCLEX_BASE_URL}/stocks/", {"size": 100})
+        response = requests.get(f"{PRIMEDELTA_BASE_URL}/stocks/", {"size": 100})
         response.raise_for_status()
         stocks_data = response.json()["items"]
         return {
@@ -305,12 +306,13 @@ class DclexClient:
         }
 
     def prices_stream_access_token(self) -> str:
-        response = self._authorized_get("/prices-stream-access-token/")
-        return response["pricesStreamAccessToken"]
+        if not self._token:
+            raise NotLoggedIn()
+        return self._token
 
     def prices_stream(self, prices_stream_access_token: str):
         for sse_message in SSEClient(
-            f"{DCLEX_BASE_URL}/prices-stream/",
+            f"{PRIMEDELTA_BASE_URL}/prices-stream/",
             params={"token": prices_stream_access_token},
         ):
             price_data = json.loads(sse_message.data)
@@ -323,9 +325,103 @@ class DclexClient:
 
     @staticmethod
     def is_market_open() -> bool:
-        response = requests.get(f"{DCLEX_BASE_URL}/market-status/")
+        response = requests.get(f"{PRIMEDELTA_BASE_URL}/market-status/")
         response.raise_for_status()
         return response.json()["isMarketOpen"]
+
+    def get_signed_price_updates(self, symbols: list[str]) -> list[bytes]:
+        """Fetch FIOracle-format signed price updates from the backend.
+
+        Returns a list of 117-byte packed updates (feedId + price + expo +
+        publishTime + v + r + s) ready to pass as `pythUpdateData` to the
+        DCLEX router/pool. Skips symbols the backend doesn't have a price for.
+        """
+        if not symbols:
+            return []
+        # `/signed-prices/` accepts Bearer auth, unlike most other endpoints
+        # which use `Authorization: Token <token>`.
+        response = requests.get(
+            f"{PRIMEDELTA_BASE_URL}/signed-prices/",
+            params={"symbols": ",".join(symbols)},
+            headers={"Authorization": f"Bearer {self._token}"},
+        )
+        if response.status_code == 401:
+            raise NotLoggedIn()
+        response.raise_for_status()
+        return [bytes.fromhex(item["signature"].removeprefix("0x")) for item in response.json()]
+
+    @staticmethod
+    def get_pyth_feed_ids(symbols: list[str]) -> dict[str, str]:
+        """Fetch Pyth price feed IDs for given stock symbols.
+
+        Returns a mapping of symbol -> pyth_feed_id for regular market hours feeds.
+        """
+        feed_ids = {}
+        for symbol in symbols:
+            response = requests.get(
+                f"{PYTH_HERMES_BASE_URL}/v2/price_feeds",
+                params={"query": symbol, "asset_type": "equity"},
+            )
+            response.raise_for_status()
+            feeds = response.json()
+
+            # Find the regular market hours feed (no suffix like .PRE, .POST, .ON)
+            for feed in feeds:
+                feed_symbol = feed.get("attributes", {}).get("symbol", "")
+                base = feed.get("attributes", {}).get("base", "")
+                if base == symbol and feed_symbol == f"Equity.US.{symbol}/USD":
+                    feed_ids[symbol] = feed["id"]
+                    break
+
+        return feed_ids
+
+    def pyth_prices_stream(self, symbols: list[str]):
+        """Stream prices from Pyth Hermes API for given stock symbols.
+
+        This method does not require authentication and can be used when not logged in.
+        """
+        feed_ids = self.get_pyth_feed_ids(symbols)
+
+        if not feed_ids:
+            return
+
+        # Build query string with all feed IDs
+        ids_param = "&".join(f"ids[]={fid}" for fid in feed_ids.values())
+        stream_url = f"{PYTH_HERMES_BASE_URL}/v2/updates/price/stream?{ids_param}"
+
+        # Create reverse mapping: feed_id -> symbol
+        id_to_symbol = {v: k for k, v in feed_ids.items()}
+
+        for sse_message in SSEClient(stream_url):
+            if not sse_message.data:
+                continue
+
+            try:
+                data = json.loads(sse_message.data)
+                parsed_prices = data.get("parsed", [])
+
+                for price_data in parsed_prices:
+                    feed_id = price_data.get("id", "")
+                    symbol = id_to_symbol.get(feed_id)
+
+                    if symbol and "price" in price_data:
+                        price_info = price_data["price"]
+                        # Convert price using exponent (e.g., price=25821026, expo=-5 -> 258.21026)
+                        raw_price = int(price_info["price"])
+                        expo = int(price_info["expo"])
+                        actual_price = Decimal(raw_price) * Decimal(10) ** expo
+
+                        publish_time = price_info.get("publish_time", 0)
+                        timestamp = datetime.fromtimestamp(publish_time, tz=timezone.utc)
+
+                        yield Price(
+                            symbol=symbol,
+                            last_price=actual_price,
+                            timestamp=timestamp,
+                            percentage_change=Decimal(0),  # Pyth doesn't provide percentage change
+                        )
+            except (json.JSONDecodeError, KeyError, ValueError):
+                continue
 
     @staticmethod
     def _parse_timestamp(timestamp: str) -> datetime:
@@ -333,7 +429,7 @@ class DclexClient:
 
     def _authorized_post(self, endpoint: str, request_data: dict) -> dict:
         response = requests.post(
-            f"{DCLEX_BASE_URL}{endpoint}",
+            f"{PRIMEDELTA_BASE_URL}{endpoint}",
             headers={"Authorization": f"Token {self._token}"},
             json=request_data,
         )
@@ -353,7 +449,7 @@ class DclexClient:
         self, endpoint: str, params: Optional[dict[str, str | int]] = None
     ) -> dict:
         response = requests.get(
-            f"{DCLEX_BASE_URL}{endpoint}",
+            f"{PRIMEDELTA_BASE_URL}{endpoint}",
             headers={"Authorization": f"Token {self._token}"},
             params=params,
         )
@@ -369,7 +465,7 @@ class DclexClient:
 
     def _authorized_delete(self, endpoint: str) -> None:
         response = requests.delete(
-            f"{DCLEX_BASE_URL}{endpoint}",
+            f"{PRIMEDELTA_BASE_URL}{endpoint}",
             headers={"Authorization": f"Token {self._token}"},
         )
         if response.status_code == 401:

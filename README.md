@@ -1,9 +1,9 @@
-# DCLEX Python Library #
+# Prime Delta Python Library #
 
-## 1. How to install DCLEX library? ##
+## 1. How to install Prime Delta library? ##
 
 ```bash
-pip install dclex
+pip install primedelta
 ```
 
 ## 2. Code examples ##

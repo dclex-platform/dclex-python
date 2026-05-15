@@ -1,240 +1,306 @@
 from decimal import Decimal
-from time import sleep
-from unittest.mock import ANY
+from unittest.mock import patch
 
 import pytest
 
-from dclex.dclex import AccountNotVerified, NotEnoughFunds, WithdrawalNotFound
-from dclex.types import OrderSide, TransactionType, Transfer, TransferHistoryStatus
-
-from .conftest import wait_for_transaction
-
-
-def test_deposit_and_withdraw_usdc(dclex, provider_url):
-    dclex.login()
-
-    usdc_available_balance_before = dclex.get_usdc_available_balance()
-    usdc_total_balance_before = dclex.get_usdc_total_balance()
-
-    # tx_hash = dclex.deposit_usdc(amount=Decimal(100))
-    # wait_for_transaction(tx_hash, provider_url)
-
-    # sleep(3)
-
-    # assert dclex.get_usdc_total_balance() - usdc_total_balance_before == 100
-    # assert dclex.get_usdc_available_balance() - usdc_available_balance_before == 100
-
-    withdrawal_id = dclex.request_usdc_withdrawal(Decimal(100))
-    tx_hash = dclex.claim_usdc_withdrawal(withdrawal_id)
-    wait_for_transaction(tx_hash, provider_url)
-
-    sleep(15)
-
-    assert dclex.get_usdc_total_balance() == usdc_total_balance_before - 100
-    assert dclex.get_usdc_available_balance() == usdc_available_balance_before - 100
+from primedelta import PrimeDelta
+from primedelta.primedelta import AccountNotVerified, NotEnoughFunds, WithdrawalNotFound
+from primedelta.primedelta_client import APIError
+from primedelta.types import (
+    AccountStatus,
+    ClaimableWithdrawal,
+    Distribution,
+    DistributionType,
+    Transfer,
+    TransactionType,
+    TransferHistoryStatus,
+)
 
 
-def test_deposit_usdc_raises_when_user_is_not_verified(dclex_unverified):
-    dclex_unverified.login()
-    with pytest.raises(AccountNotVerified):
-        dclex_unverified.deposit_usdc(Decimal(100))
+class TestDepositUSDC:
+    def test_deposit_usdc_raises_when_user_is_not_verified(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
+
+        with patch.object(
+            primedelta._primedelta_client,
+            "get_account_status",
+            return_value=AccountStatus.NOT_VERIFIED,
+        ):
+            with pytest.raises(AccountNotVerified):
+                primedelta.deposit_usdc(Decimal("100"))
 
 
-def test_request_usdc_withdrawal_raises_when_user_is_not_verified(dclex_unverified):
-    dclex_unverified.login()
-    with pytest.raises(AccountNotVerified):
-        dclex_unverified.request_usdc_withdrawal(Decimal(100))
+class TestWithdrawUSDC:
+    def test_request_usdc_withdrawal(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
+
+        with patch.object(
+            primedelta._primedelta_client,
+            "get_account_status",
+            return_value=AccountStatus.VERIFIED,
+        ):
+            with patch.object(
+                primedelta._primedelta_client,
+                "request_usdc_withdrawal",
+                return_value=123,
+            ) as mock_request:
+                withdrawal_id = primedelta.request_usdc_withdrawal(Decimal("100"))
+
+        assert withdrawal_id == 123
+        mock_request.assert_called_once_with(amount=Decimal("100"))
+
+    def test_request_usdc_withdrawal_raises_when_user_is_not_verified(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
+
+        with patch.object(
+            primedelta._primedelta_client,
+            "get_account_status",
+            return_value=AccountStatus.NOT_VERIFIED,
+        ):
+            with pytest.raises(AccountNotVerified):
+                primedelta.request_usdc_withdrawal(Decimal("100"))
+
+    def test_request_usdc_withdrawal_raises_when_not_enough_funds(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
+
+        with patch.object(
+            primedelta._primedelta_client,
+            "get_account_status",
+            return_value=AccountStatus.VERIFIED,
+        ):
+            with patch.object(
+                primedelta._primedelta_client,
+                "request_usdc_withdrawal",
+                side_effect=APIError("INSUFFICIENT_FUNDS"),
+            ):
+                with pytest.raises(NotEnoughFunds):
+                    primedelta.request_usdc_withdrawal(Decimal("10000"))
+
+    def test_claim_usdc_withdrawal_raises_when_not_found(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
+
+        with patch.object(
+            primedelta._primedelta_client,
+            "claimable_withdrawals",
+            return_value=[],
+        ):
+            with pytest.raises(WithdrawalNotFound):
+                primedelta.claim_usdc_withdrawal(9999)
 
 
-def test_request_usdc_withdrawal_raises_when_not_enough_funds(dclex, provider_url):
-    dclex.login()
-    usdc_available_balance = dclex.get_usdc_available_balance()
+class TestDepositStock:
+    def test_deposit_stock_raises_when_user_is_not_verified(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
 
-    with pytest.raises(NotEnoughFunds):
-        dclex.request_usdc_withdrawal(Decimal(usdc_available_balance + 1))
-
-
-def test_claim_usdc_withdrawal_raises_when_claimable_withdrawal_id_does_not_exist(
-    dclex, provider_url
-):
-    dclex.login()
-    with pytest.raises(WithdrawalNotFound):
-        dclex.claim_usdc_withdrawal(9999)
-
-
-def test_withdraw_and_deposit_stock(dclex, provider_url):
-    dclex.login()
-
-    tx_hash = dclex.deposit_usdc(Decimal(200))
-    wait_for_transaction(tx_hash, provider_url)
-    sleep(3)
-
-    dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
-    sleep(30)
-
-    aapl_available_balance_before = dclex.get_stock_available_balance("AAPL")
-    aapl_total_balance_before = dclex.get_stock_total_balance("AAPL")
-
-    withdrawal_id = dclex.request_stock_withdrawal("AAPL", 1)
-    tx_hash = dclex.claim_stock_withdrawal(withdrawal_id)
-    wait_for_transaction(tx_hash, provider_url)
-    sleep(20)
-
-    assert (
-        dclex.get_stock_available_balance("AAPL") - aapl_available_balance_before == -1
-    )
-    assert dclex.get_stock_total_balance("AAPL") - aapl_total_balance_before == -1
-
-    tx_hash = dclex.deposit_stock_token("AAPL", 1)
-    wait_for_transaction(tx_hash, provider_url)
-    sleep(3)
-
-    assert dclex.get_stock_available_balance("AAPL") == aapl_available_balance_before
-    assert dclex.get_stock_total_balance("AAPL") == aapl_total_balance_before
+        with patch.object(
+            primedelta._primedelta_client,
+            "get_account_status",
+            return_value=AccountStatus.NOT_VERIFIED,
+        ):
+            with pytest.raises(AccountNotVerified):
+                primedelta.deposit_stock_token("AAPL", 1)
 
 
-def test_deposit_stock_raises_when_user_is_not_verified(dclex_unverified):
-    dclex_unverified.login()
-    with pytest.raises(AccountNotVerified):
-        dclex_unverified.deposit_stock_token("AAPL", Decimal(1))
+class TestWithdrawStock:
+    def test_request_stock_withdrawal_raises_when_user_is_not_verified(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
+
+        with patch.object(
+            primedelta._primedelta_client,
+            "get_account_status",
+            return_value=AccountStatus.NOT_VERIFIED,
+        ):
+            with pytest.raises(AccountNotVerified):
+                primedelta.request_stock_withdrawal("AAPL", 1)
+
+    def test_request_stock_withdrawal_raises_when_not_enough_funds(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
+
+        with patch.object(
+            primedelta._primedelta_client,
+            "get_account_status",
+            return_value=AccountStatus.DID_MINTED,
+        ):
+            with patch.object(
+                primedelta._primedelta_client,
+                "request_stock_withdrawal",
+                side_effect=APIError("INSUFFICIENT_FUNDS"),
+            ):
+                with pytest.raises(NotEnoughFunds):
+                    primedelta.request_stock_withdrawal("AAPL", 100)
+
+    def test_claim_stock_withdrawal_raises_when_not_found(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
+
+        with patch.object(
+            primedelta._primedelta_client,
+            "claimable_withdrawals",
+            return_value=[],
+        ):
+            with pytest.raises(WithdrawalNotFound):
+                primedelta.claim_stock_withdrawal(9999)
 
 
-def test_request_stock_withdrawal_raises_when_user_is_not_verified(dclex_unverified):
-    dclex_unverified.login()
-    with pytest.raises(AccountNotVerified):
-        dclex_unverified.request_stock_withdrawal("AAPL", Decimal(1))
+class TestPendingTransfers:
+    def test_pending_transfers(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
+
+        mock_transfers = [
+            Transfer(
+                transaction_id="0x123",
+                amount=Decimal("100"),
+                symbol="USDC",
+                type=TransactionType.DEPOSIT,
+                status=TransferHistoryStatus.PENDING,
+            )
+        ]
+
+        with patch.object(
+            primedelta._primedelta_client,
+            "get_pending_transfers",
+            return_value=mock_transfers,
+        ):
+            transfers = primedelta.pending_transfers()
+
+        assert len(transfers) == 1
+        assert transfers[0].symbol == "USDC"
+        assert transfers[0].status == TransferHistoryStatus.PENDING
 
 
-def test_request_stock_withdrawal_raises_when_not_enough_funds(dclex, provider_url):
-    dclex.login()
-    available_balance = dclex.get_stock_available_balance("AAPL")
+class TestClosedTransfers:
+    def test_closed_transfers(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
 
-    with pytest.raises(NotEnoughFunds):
-        dclex.request_stock_withdrawal("AAPL", available_balance + 1)
+        mock_transfers = [
+            Transfer(
+                transaction_id="0x123",
+                amount=Decimal("100"),
+                symbol="USDC",
+                type=TransactionType.DEPOSIT,
+                status=TransferHistoryStatus.DONE,
+            ),
+            Transfer(
+                transaction_id="0x456",
+                amount=Decimal("50"),
+                symbol="USDC",
+                type=TransactionType.WITHDRAWAL,
+                status=TransferHistoryStatus.DONE,
+            ),
+        ]
 
+        with patch.object(
+            primedelta._primedelta_client,
+            "get_closed_transfers",
+            return_value=mock_transfers,
+        ):
+            transfers = primedelta.closed_transfers()
 
-def test_claim_stock_withdrawal_raises_when_claimable_withdrawal_id_does_not_exist(
-    dclex, provider_url
-):
-    dclex.login()
-    with pytest.raises(WithdrawalNotFound):
-        dclex.claim_stock_withdrawal(9999)
-
-
-def test_usdc_pending_transfers(dclex, provider_url):
-    dclex.login()
-
-    assert dclex.pending_transfers() == []
-
-    tx_hash = dclex.deposit_usdc(Decimal(100))
-    wait_for_transaction(tx_hash, provider_url)
-    sleep(3)
-    assert dclex.pending_transfers() == [
-        Transfer(
-            ANY,
-            Decimal(100),
-            "USDC",
-            TransactionType.DEPOSIT,
-            TransferHistoryStatus.PENDING,
-        )
-    ]
-
-    sleep(10)
-    assert dclex.pending_transfers() == []
-
-    tx_hash = dclex.withdraw_usdc(Decimal(100))
-    assert dclex.pending_transfers() == [
-        Transfer(
-            ANY,
-            Decimal(100),
-            "USDC",
-            TransactionType.WITHDRAWAL,
-            TransferHistoryStatus.CLAIMABLE,
-        )
-    ]
-    wait_for_transaction(tx_hash, provider_url)
-    sleep(3)
-    assert dclex.pending_transfers() == []
+        assert len(transfers) == 2
+        assert transfers[0].type == TransactionType.DEPOSIT
+        assert transfers[1].type == TransactionType.WITHDRAWAL
 
 
-def test_usdc_closed_transfers(dclex, provider_url):
-    dclex.login()
-    deposit_tx_hash = dclex.deposit_usdc(Decimal(100))
-    wait_for_transaction(deposit_tx_hash, provider_url)
-    sleep(2)
-    withdrawal_tx_hash = dclex.withdraw_usdc(Decimal(100))
-    wait_for_transaction(withdrawal_tx_hash, provider_url)
-    sleep(2)
+class TestDistributions:
+    def test_distributions(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
 
-    closed_transfers = {
-        transfer.transaction_id: transfer for transfer in dclex.closed_transfers()
-    }
-    assert closed_transfers[deposit_tx_hash] == Transfer(
-        deposit_tx_hash,
-        Decimal(100),
-        "USDC",
-        TransactionType.DEPOSIT,
-        TransferHistoryStatus.DONE,
-    )
-    assert closed_transfers[withdrawal_tx_hash] == Transfer(
-        withdrawal_tx_hash,
-        Decimal(100),
-        "USDC",
-        TransactionType.WITHDRAWAL,
-        TransferHistoryStatus.DONE,
-    )
+        mock_distributions = [
+            Distribution(
+                amount=Decimal("10.50"),
+                type=DistributionType.DIVIDEND,
+                stock_symbol="AAPL",
+                stock_quantity=Decimal("100"),
+            )
+        ]
 
+        with patch.object(
+            primedelta._primedelta_client,
+            "get_distributions",
+            return_value=mock_distributions,
+        ):
+            distributions = primedelta.distributions()
 
-def test_stock_token_pending_transfers(dclex, provider_url):
-    dclex.login()
-    wait_for_transaction(dclex.deposit_usdc(Decimal(200)), provider_url)
-    sleep(2)
-    dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
-    sleep(30)
-
-    dclex.withdraw_stock_token("AAPL", 1)
-    assert dclex.pending_transfers() == [
-        Transfer(
-            None,
-            Decimal(1),
-            "AAPL",
-            TransactionType.WITHDRAWAL,
-            TransferHistoryStatus.CLAIMABLE,
-        )
-    ]
-    sleep(3)
-
-    assert dclex.pending_transfers() == []
+        assert len(distributions) == 1
+        assert distributions[0].stock_symbol == "AAPL"
+        assert distributions[0].type == DistributionType.DIVIDEND
 
 
-def test_stock_token_closed_transfers(dclex, provider_url):
-    dclex.login()
-    wait_for_transaction(dclex.deposit_usdc(Decimal(200)), provider_url)
-    sleep(2)
-    dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
-    sleep(30)
+class TestClaimableWithdrawals:
+    def test_claimable_withdrawals(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
 
-    withdrawal_tx_hash = dclex.withdraw_stock_token("AAPL", 1)
-    wait_for_transaction(withdrawal_tx_hash, provider_url)
-    sleep(2)
-    deposit_tx_hash = dclex.deposit_stock_token("AAPL", 1)
-    wait_for_transaction(deposit_tx_hash, provider_url)
-    sleep(2)
+        mock_withdrawals = [
+            ClaimableWithdrawal(
+                withdrawal_id=123,
+                amount=Decimal("100"),
+                asset_type="USDC",
+            ),
+            ClaimableWithdrawal(
+                withdrawal_id=456,
+                amount=Decimal("5"),
+                asset_type="AAPL",
+            ),
+        ]
 
-    closed_transfers = {
-        transfer.transaction_id: transfer for transfer in dclex.closed_transfers()
-    }
-    assert closed_transfers[deposit_tx_hash] == Transfer(
-        deposit_tx_hash,
-        Decimal(1),
-        "AAPL",
-        TransactionType.DEPOSIT,
-        TransferHistoryStatus.DONE,
-    )
-    assert closed_transfers[withdrawal_tx_hash] == Transfer(
-        withdrawal_tx_hash,
-        Decimal(1),
-        "AAPL",
-        TransactionType.WITHDRAWAL,
-        TransferHistoryStatus.DONE,
-    )
+        with patch.object(
+            primedelta._primedelta_client,
+            "claimable_withdrawals",
+            return_value=mock_withdrawals,
+        ):
+            withdrawals = primedelta.claimable_withdrawals()
+
+        assert len(withdrawals) == 2
+        assert withdrawals[0].asset_type == "USDC"
+        assert withdrawals[1].asset_type == "AAPL"

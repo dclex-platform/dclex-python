@@ -1,0 +1,12 @@
+{
+  "chain_id": 2028,
+  "core": {
+    "usdc": "0x1A71DF49ea92867bda910b948Da588383a0450Ee",
+    "vault": "0xb0E19D426c737dAe9deE8dAeB95C6d2491882204",
+    "factory": "0xb39CA4095bf1E2e617df5aD898e058A58939C50F",
+    "digital_identity": "0xAb8C84125E0380736f0e1cC9f73A249c82417cA1",
+    "dex_router": "0xa8a149a442e0ca6A96377A805A335A96D466ea10",
+    "position_manager": "0x4dEC8613103470d0F0CaF96a94fEded6e67984bF",
+    "oracle": "0xb152f54785c308152358c8a70cfc75c92387318f"
+  }
+}

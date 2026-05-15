@@ -4,3 +4,7 @@ dist/
 .idea/
 .venv
 venv/
+.env
+.env.local
+.claude/settings.local.json
+uv.lock

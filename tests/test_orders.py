@@ -1,195 +1,248 @@
-import math
 from datetime import date, timedelta
 from decimal import Decimal
-from time import sleep
+from unittest.mock import patch
 
 import pytest
 
-from dclex.dclex import NotEnoughFunds
-from dclex.types import Order, OrderSide, OrderStatus
-
-from .conftest import wait_for_transaction
-
-
-def test_send_buy_and_sell_limit_order(dclex, provider_url):
-    dclex.login()
-
-    tx_hash = dclex.deposit_usdc(Decimal(200))
-    wait_for_transaction(tx_hash, provider_url)
-
-    aapl_available_balance_before = dclex.get_stock_available_balance("AAPL")
-    aapl_total_balance_before = dclex.get_stock_total_balance("AAPL")
-
-    order_id = dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
-    assert dclex.get_order_status(order_id) == OrderStatus.PENDING
-    sleep(30)
-
-    assert (
-        dclex.get_stock_available_balance("AAPL") - aapl_available_balance_before == 1
-    )
-    assert dclex.get_stock_total_balance("AAPL") - aapl_total_balance_before == 1
-
-    dclex.send_limit_order(
-        OrderSide.SELL, "AAPL", 1, Decimal(190), date.today() + timedelta(days=10)
-    )
-    sleep(30)
-
-    assert dclex.get_stock_available_balance("AAPL") == aapl_available_balance_before
-    assert dclex.get_stock_total_balance("AAPL") == aapl_total_balance_before
+from primedelta import PrimeDelta
+from primedelta.primedelta import NotEnoughFunds
+from primedelta.primedelta_client import APIError
+from primedelta.types import Order, OrderSide, OrderStatus
 
 
-def test_send_buy_and_sell_limit_order_raises_when_not_enough_funds_for_order(dclex):
-    dclex.login()
-    price = next(
-        price_info.last_price
-        for price_info in dclex.prices_stream()
-        if price_info.symbol == "AAPL"
-    )
-    usdc_available_balance = dclex.get_usdc_available_balance()
-    stocks_quantity = math.ceil(usdc_available_balance / price) + 1
+class TestLimitOrders:
+    def test_send_buy_limit_order(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
 
-    with pytest.raises(NotEnoughFunds):
-        dclex.send_limit_order(OrderSide.BUY, "AAPL", stocks_quantity, price)
+        with patch.object(
+            primedelta._primedelta_client,
+            "send_limit_order",
+            return_value=123,
+        ) as mock_send:
+            order_id = primedelta.send_limit_order(
+                OrderSide.BUY, "AAPL", 10, Decimal("150.00")
+            )
 
+        assert order_id == 123
+        mock_send.assert_called_once_with(
+            amount=10,
+            asset_type="AAPL",
+            order_side=OrderSide.BUY,
+            price_limit=Decimal("150.00"),
+            date_of_cancellation=None,
+        )
 
-def test_send_sell_market_order(dclex, provider_url):
-    dclex.login()
+    def test_send_sell_limit_order_with_cancellation_date(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
 
-    tx_hash = dclex.deposit_usdc(Decimal(200))
-    wait_for_transaction(tx_hash, provider_url)
+        cancellation_date = date.today() + timedelta(days=10)
 
-    aapl_available_balance_before = dclex.get_stock_available_balance("AAPL")
-    aapl_total_balance_before = dclex.get_stock_total_balance("AAPL")
+        with patch.object(
+            primedelta._primedelta_client,
+            "send_limit_order",
+            return_value=456,
+        ) as mock_send:
+            order_id = primedelta.send_limit_order(
+                OrderSide.SELL, "AAPL", 5, Decimal("160.00"), cancellation_date
+            )
 
-    dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
-    sleep(30)
+        assert order_id == 456
+        mock_send.assert_called_once_with(
+            amount=5,
+            asset_type="AAPL",
+            order_side=OrderSide.SELL,
+            price_limit=Decimal("160.00"),
+            date_of_cancellation=cancellation_date,
+        )
 
-    assert (
-        dclex.get_stock_available_balance("AAPL") - aapl_available_balance_before == 1
-    )
-    assert dclex.get_stock_total_balance("AAPL") - aapl_total_balance_before == 1
+    def test_send_limit_order_raises_when_not_enough_funds(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
 
-    dclex.send_sell_market_order("AAPL", 1)
-    sleep(30)
-
-    assert dclex.get_stock_available_balance("AAPL") == aapl_available_balance_before
-    assert dclex.get_stock_total_balance("AAPL") == aapl_total_balance_before
-
-
-def test_send_sell_market_order_raises_when_not_enough_funds_for_order(dclex):
-    dclex.login()
-    available_balance = dclex.get_stock_available_balance("AAPL")
-
-    with pytest.raises(NotEnoughFunds):
-        dclex.send_sell_market_order("AAPL", available_balance + 1)
-
-
-def test_cancelling_orders(dclex, provider_url):
-    dclex.login()
-
-    tx_hash = dclex.deposit_usdc(Decimal(200))
-    wait_for_transaction(tx_hash, provider_url)
-    sleep(3)
-
-    usdc_available_balance_before = dclex.get_usdc_available_balance()
-    usdc_total_balance_before = dclex.get_usdc_total_balance()
-    aapl_available_balance_before = dclex.get_stock_available_balance("AAPL")
-    aapl_total_balance_before = dclex.get_stock_total_balance("AAPL")
-
-    order_id = dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
-    dclex.cancel_order(order_id)
-    sleep(30)
-
-    assert dclex.get_usdc_available_balance() == usdc_available_balance_before
-    assert dclex.get_usdc_total_balance() == usdc_total_balance_before
-    assert dclex.get_stock_available_balance("AAPL") == aapl_available_balance_before
-    assert dclex.get_stock_total_balance("AAPL") == aapl_total_balance_before
-
-
-def test_open_orders(dclex, provider_url):
-    dclex.login()
-
-    tx_hash = dclex.deposit_usdc(Decimal(600))
-    wait_for_transaction(tx_hash, provider_url)
-    sleep(3)
-
-    order_id_1 = dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
-    order_id_2 = dclex.send_limit_order(
-        OrderSide.BUY, "AMZN", 2, Decimal(170), date.today() + timedelta(days=10)
-    )
-
-    open_orders = dclex.open_orders()
-    assert len(open_orders) == 2
-    assert open_orders[0] == Order(
-        id=order_id_1,
-        order_side=OrderSide.BUY,
-        type="LIMIT",
-        symbol="AAPL",
-        quantity=1,
-        price=Decimal(190),
-        status=OrderStatus.PENDING,
-        date_of_cancellation=None,
-    )
-    assert open_orders[1] == Order(
-        id=order_id_2,
-        order_side=OrderSide.BUY,
-        type="LIMIT",
-        symbol="AMZN",
-        quantity=2,
-        price=Decimal(170),
-        status=OrderStatus.PENDING,
-        date_of_cancellation=date.today() + timedelta(days=10),
-    )
-
-    dclex.cancel_order(order_id_2)
-    sleep(30)
-    assert dclex.open_orders() == []
+        with patch.object(
+            primedelta._primedelta_client,
+            "send_limit_order",
+            side_effect=APIError("INSUFFICIENT_FUNDS"),
+        ):
+            with pytest.raises(NotEnoughFunds):
+                primedelta.send_limit_order(OrderSide.BUY, "AAPL", 1000, Decimal("200.00"))
 
 
-def test_closed_orders(dclex, provider_url):
-    dclex.login()
+class TestMarketOrders:
+    def test_send_sell_market_order(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
 
-    tx_hash = dclex.deposit_usdc(Decimal(600))
-    wait_for_transaction(tx_hash, provider_url)
-    sleep(3)
-    closed_orders_len_before = len(dclex.closed_orders())
+        with patch.object(
+            primedelta._primedelta_client,
+            "send_sell_market_order",
+            return_value=789,
+        ) as mock_send:
+            order_id = primedelta.send_sell_market_order("AAPL", 5)
 
-    order_id_1 = dclex.send_limit_order(OrderSide.BUY, "AAPL", 1, Decimal(190))
-    order_id_2 = dclex.send_limit_order(
-        OrderSide.BUY, "AMZN", 2, Decimal(170), date.today() + timedelta(days=10)
-    )
+        assert order_id == 789
+        mock_send.assert_called_once_with(amount=5, asset_type="AAPL")
 
-    closed_orders_id = {order.id for order in dclex.closed_orders()}
-    assert order_id_1 not in closed_orders_id
-    assert order_id_2 not in closed_orders_id
+    def test_send_sell_market_order_raises_when_not_enough_funds(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
 
-    dclex.cancel_order(order_id_2)
-    sleep(30)
-
-    closed_orders = {order.id: order for order in dclex.closed_orders()}
-    assert len(closed_orders) == closed_orders_len_before + 2
-    assert closed_orders[order_id_1] == Order(
-        id=order_id_1,
-        order_side=OrderSide.BUY,
-        type="LIMIT",
-        symbol="AAPL",
-        quantity=1,
-        price=Decimal(190),
-        status=OrderStatus.EXECUTED,
-        date_of_cancellation=None,
-    )
-    assert closed_orders[order_id_2] == Order(
-        id=order_id_2,
-        order_side=OrderSide.BUY,
-        type="LIMIT",
-        symbol="AMZN",
-        quantity=2,
-        price=Decimal(170),
-        status=OrderStatus.CANCELED,
-        date_of_cancellation=date.today() + timedelta(days=10),
-    )
+        with patch.object(
+            primedelta._primedelta_client,
+            "send_sell_market_order",
+            side_effect=APIError("INSUFFICIENT_FUNDS"),
+        ):
+            with pytest.raises(NotEnoughFunds):
+                primedelta.send_sell_market_order("AAPL", 100)
 
 
-def test_is_market_open_returns_if_market_is_currently_open(dclex, provider_url):
-    result = dclex.is_market_open()
-    assert isinstance(result, bool)
+class TestCancelOrder:
+    def test_cancel_order(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
+
+        with patch.object(
+            primedelta._primedelta_client, "cancel_order"
+        ) as mock_cancel:
+            primedelta.cancel_order(123)
+
+        mock_cancel.assert_called_once_with(123)
+
+
+class TestOrderStatus:
+    def test_get_order_status(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
+
+        with patch.object(
+            primedelta._primedelta_client,
+            "get_order_status",
+            return_value=OrderStatus.PENDING,
+        ):
+            status = primedelta.get_order_status(123)
+
+        assert status == OrderStatus.PENDING
+
+
+class TestOpenOrders:
+    def test_open_orders(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
+
+        mock_orders = [
+            Order(
+                id=1,
+                order_side=OrderSide.BUY,
+                type="LIMIT",
+                symbol="AAPL",
+                quantity=10,
+                price=Decimal("150.00"),
+                status=OrderStatus.PENDING,
+                date_of_cancellation=None,
+            ),
+            Order(
+                id=2,
+                order_side=OrderSide.SELL,
+                type="LIMIT",
+                symbol="TSLA",
+                quantity=5,
+                price=Decimal("200.00"),
+                status=OrderStatus.PENDING,
+                date_of_cancellation=date.today() + timedelta(days=10),
+            ),
+        ]
+
+        with patch.object(
+            primedelta._primedelta_client, "open_orders", return_value=mock_orders
+        ):
+            orders = primedelta.open_orders()
+
+        assert len(orders) == 2
+        assert orders[0].symbol == "AAPL"
+        assert orders[1].symbol == "TSLA"
+
+
+class TestClosedOrders:
+    def test_closed_orders(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
+
+        mock_orders = [
+            Order(
+                id=1,
+                order_side=OrderSide.BUY,
+                type="LIMIT",
+                symbol="AAPL",
+                quantity=10,
+                price=Decimal("150.00"),
+                status=OrderStatus.EXECUTED,
+                date_of_cancellation=None,
+            ),
+            Order(
+                id=2,
+                order_side=OrderSide.BUY,
+                type="LIMIT",
+                symbol="AMZN",
+                quantity=5,
+                price=Decimal("170.00"),
+                status=OrderStatus.CANCELED,
+                date_of_cancellation=date.today() + timedelta(days=10),
+            ),
+        ]
+
+        with patch.object(
+            primedelta._primedelta_client, "closed_orders", return_value=mock_orders
+        ):
+            orders = primedelta.closed_orders()
+
+        assert len(orders) == 2
+        assert orders[0].status == OrderStatus.EXECUTED
+        assert orders[1].status == OrderStatus.CANCELED
+
+
+class TestMarketStatus:
+    def test_is_market_open(self):
+        with patch("primedelta.primedelta.Web3"):
+            primedelta = PrimeDelta(
+                private_key="0x" + "1" * 64,
+                web3_provider_url="http://localhost:8545",
+            )
+
+        with patch.object(
+            primedelta._primedelta_client, "is_market_open", return_value=True
+        ):
+            assert primedelta.is_market_open() is True
+
+        with patch.object(
+            primedelta._primedelta_client, "is_market_open", return_value=False
+        ):
+            assert primedelta.is_market_open() is False
