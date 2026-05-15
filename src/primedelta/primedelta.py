@@ -668,15 +668,31 @@ class PrimeDelta:
         self, contract_function: ContractFunction, value: int = 0
     ) -> str:
         # Besu's "pending" nonce occasionally lags behind the actual account
-        # state after a fresh receipt, causing the next submission to land on
-        # an already-used nonce. Retry once after refreshing nonce from chain.
-        try:
-            return self._build_and_send_transaction_once(contract_function, value)
-        except TransactionFailed as e:
-            if "nonce too low" not in (e.reason or "").lower():
-                raise
-            self._next_nonce = None  # force re-query from chain
-            return self._build_and_send_transaction_once(contract_function, value)
+        # state after a fresh receipt. When the chain rejects "nonce too low"
+        # it tells us the expected nonce in the error — parse it and retry.
+        import re
+
+        import time
+
+        last_error: Optional[TransactionFailed] = None
+        for attempt in range(5):
+            try:
+                return self._build_and_send_transaction_once(contract_function, value)
+            except TransactionFailed as e:
+                if "nonce too low" not in (e.reason or "").lower():
+                    raise
+                last_error = e
+                # The error tells us exactly what the chain expects next; pin
+                # our local counter to that and let the chain settle briefly
+                # before retrying so failed-status mined txs propagate.
+                match = re.search(r"account nonce (\d+)", e.reason)
+                if match:
+                    self._next_nonce = int(match.group(1)) - 1  # reserve bumps +1
+                else:
+                    self._next_nonce = None
+                time.sleep(1.0 + attempt)  # back off: 1s, 2s, 3s, 4s, 5s
+        assert last_error is not None
+        raise last_error
 
     def _build_and_send_transaction_once(
         self, contract_function: ContractFunction, value: int = 0
@@ -733,10 +749,14 @@ class PrimeDelta:
         # pre-approve state on chains with real block time (dev/prod), reverting.
         receipt = self._web3.eth.wait_for_transaction_receipt(tx_hash)
         if receipt["status"] == 0:
-            # Re-run as eth_call at the mined block to extract the revert reason.
+            # Re-run as eth_call at the block BEFORE our tx mined to extract
+            # the revert reason. Using the mined block itself would replay
+            # against post-tx state — the account's nonce is already past
+            # ours, and Besu would mis-report "Nonce too low" instead of the
+            # actual revert.
             reason = "reverted with no reason"
             try:
-                self._web3.eth.call(transaction, receipt["blockNumber"])
+                self._web3.eth.call(transaction, receipt["blockNumber"] - 1)
             except ContractLogicError as e:
                 reason = _decode_revert(e)
             except Exception as e:
