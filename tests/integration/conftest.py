@@ -96,6 +96,25 @@ def wait_for_transaction(tx_hash: str, provider_url: str) -> None:
     Web3(Web3.HTTPProvider(provider_url)).eth.wait_for_transaction_receipt(tx_hash)
 
 
+def wait_for_condition(predicate, message: str, timeout_s: float = 60.0, interval_s: float = 1.0):
+    """Poll `predicate()` until it returns a truthy value; pytest.fail if it
+    doesn't within `timeout_s`. Returns whatever `predicate()` returned.
+
+    Used by integration tests that depend on backend indexer / async worker
+    state catching up after an on-chain action.
+    """
+    import time
+
+    deadline = time.time() + timeout_s
+    last = None
+    while time.time() < deadline:
+        last = predicate()
+        if last:
+            return last
+        time.sleep(interval_s)
+    pytest.fail(f"timed out after {timeout_s:.0f}s waiting for: {message}")
+
+
 # Anvil default deployer key — has 10000 ETH on a fresh local chain.
 # Use to fund the test account with gas + USDC (USDCMock.mint is unrestricted).
 _ANVIL_DEPLOYER_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"

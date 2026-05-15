@@ -8,10 +8,14 @@ These tests require a real environment setup:
 
 Run with: uv run pytest tests/integration/ -v
 """
+from decimal import Decimal
 
 import pytest
 
+from primedelta import SwapSide
 from primedelta.types import AccountStatus
+
+from .conftest import wait_for_condition, wait_for_transaction
 
 
 @pytest.mark.integration
@@ -124,6 +128,143 @@ class TestTransfersIntegration:
     def test_get_claimable_withdrawals(self, primedelta_logged_in):
         withdrawals = primedelta_logged_in.claimable_withdrawals()
         assert isinstance(withdrawals, list)
+
+
+@pytest.mark.integration
+class TestUSDCLifecycle:
+    """End-to-end USDC deposit -> request withdrawal -> claim, with assertions
+    that the backend indexer + on-chain state both reflect each step.
+
+    Reproduces the scenario Copilot flagged as missing in the mock-heavy unit
+    suite: real transfer round-trip with state-transition checks.
+    """
+
+    def test_deposit_then_claim_round_trip(self, primedelta_logged_in, provider_url):
+        amount = Decimal("1")  # 1 USDC — tiny, won't move anything meaningful
+
+        wallet_before = primedelta_logged_in.get_onchain_usdc_balance()
+        backend_before = primedelta_logged_in.get_usdc_total_balance()
+
+        deposit_tx = primedelta_logged_in.deposit_usdc(amount)
+        assert deposit_tx.startswith("0x")
+        wait_for_transaction(deposit_tx, provider_url)
+
+        # On-chain: wallet's USDC dropped by `amount` after the deposit mined.
+        wallet_after_deposit = primedelta_logged_in.get_onchain_usdc_balance()
+        assert wallet_before - wallet_after_deposit >= amount - Decimal("0.000001"), (
+            f"wallet USDC didn't drop by {amount}: "
+            f"before={wallet_before}, after={wallet_after_deposit}"
+        )
+
+        # Backend: indexer eventually credits the deposit.
+        wait_for_condition(
+            lambda: primedelta_logged_in.get_usdc_total_balance() >= backend_before
+            + amount
+            - Decimal("0.01"),
+            f"backend USDC balance to reflect +{amount} deposit",
+            timeout_s=60,
+        )
+
+        withdrawal_id = primedelta_logged_in.request_usdc_withdrawal(amount)
+        assert isinstance(withdrawal_id, int)
+
+        # Backend marks withdrawal claimable after its worker processes it.
+        wait_for_condition(
+            lambda: any(
+                w.withdrawal_id == withdrawal_id
+                for w in primedelta_logged_in.claimable_withdrawals()
+            ),
+            f"withdrawal {withdrawal_id} to appear in claimable_withdrawals()",
+            timeout_s=120,
+        )
+
+        claim_tx = primedelta_logged_in.claim_usdc_withdrawal(withdrawal_id)
+        assert claim_tx.startswith("0x")
+        wait_for_transaction(claim_tx, provider_url)
+
+        # On-chain: wallet's USDC came back (modulo tx gas in native, USDC is
+        # whole; should equal pre-deposit ± rounding).
+        wallet_after_claim = primedelta_logged_in.get_onchain_usdc_balance()
+        assert wallet_after_claim >= wallet_before - Decimal("0.000001"), (
+            f"wallet USDC didn't return after claim: "
+            f"before={wallet_before}, after_claim={wallet_after_claim}"
+        )
+
+
+@pytest.mark.integration
+class TestStockLifecycle:
+    """Stock-token deposit -> request withdrawal -> claim round-trip. Pre-funds
+    the wallet via DEX swap so the test is self-contained.
+    """
+
+    SYMBOL = "AAPL"
+    DEPOSIT_AMOUNT = 1  # whole stock-token units (deposit_stock_token takes int)
+
+    def _ensure_stock_units(self, primedelta_logged_in, units: int) -> None:
+        balance = primedelta_logged_in.get_onchain_stock_balance(self.SYMBOL)
+        if balance >= units:
+            return
+        # Buy enough to cover with comfortable headroom (AAPL ~ $300, so 5
+        # USDC ~ 0.016 AAPL — for `units >= 1` we need a sizeable buy).
+        primedelta_logged_in.swap_exact_input(
+            self.SYMBOL,
+            SwapSide.USDC_TO_STOCK,
+            amount_in=Decimal(units * 400),  # ~price * units + slack
+            min_amount_out=Decimal("0"),
+        )
+
+    def test_deposit_then_claim_round_trip(self, primedelta_logged_in, provider_url):
+        self._ensure_stock_units(primedelta_logged_in, self.DEPOSIT_AMOUNT)
+
+        wallet_before = primedelta_logged_in.get_onchain_stock_balance(self.SYMBOL)
+        backend_before = primedelta_logged_in.get_stock_total_balance(self.SYMBOL)
+
+        deposit_tx = primedelta_logged_in.deposit_stock_token(
+            self.SYMBOL, self.DEPOSIT_AMOUNT
+        )
+        assert deposit_tx.startswith("0x")
+        wait_for_transaction(deposit_tx, provider_url)
+
+        # On-chain: stock balance dropped by the deposited unit count.
+        wallet_after_deposit = primedelta_logged_in.get_onchain_stock_balance(self.SYMBOL)
+        assert wallet_before - wallet_after_deposit >= Decimal(self.DEPOSIT_AMOUNT) - Decimal(
+            "0.000001"
+        ), (
+            f"{self.SYMBOL} wallet balance didn't drop by {self.DEPOSIT_AMOUNT}: "
+            f"before={wallet_before}, after={wallet_after_deposit}"
+        )
+
+        # Backend: indexer credits the deposit on the user's position.
+        wait_for_condition(
+            lambda: primedelta_logged_in.get_stock_total_balance(self.SYMBOL)
+            >= backend_before + Decimal(self.DEPOSIT_AMOUNT) - Decimal("0.000001"),
+            f"backend {self.SYMBOL} position to reflect +{self.DEPOSIT_AMOUNT}",
+            timeout_s=60,
+        )
+
+        withdrawal_id = primedelta_logged_in.request_stock_withdrawal(
+            self.SYMBOL, self.DEPOSIT_AMOUNT
+        )
+        assert isinstance(withdrawal_id, int)
+
+        wait_for_condition(
+            lambda: any(
+                w.withdrawal_id == withdrawal_id
+                for w in primedelta_logged_in.claimable_withdrawals()
+            ),
+            f"stock withdrawal {withdrawal_id} to appear in claimable_withdrawals()",
+            timeout_s=120,
+        )
+
+        claim_tx = primedelta_logged_in.claim_stock_withdrawal(withdrawal_id)
+        assert claim_tx.startswith("0x")
+        wait_for_transaction(claim_tx, provider_url)
+
+        wallet_after_claim = primedelta_logged_in.get_onchain_stock_balance(self.SYMBOL)
+        assert wallet_after_claim >= wallet_before - Decimal("0.000001"), (
+            f"{self.SYMBOL} wallet balance didn't return after claim: "
+            f"before={wallet_before}, after_claim={wallet_after_claim}"
+        )
 
 
 @pytest.mark.integration
