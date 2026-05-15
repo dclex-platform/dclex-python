@@ -8,30 +8,46 @@ from primedelta.types import Price
 
 class TestGetPythFeedIds:
     def test_returns_feed_ids_for_valid_symbols(self):
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = [
-            {
-                "id": "abc123",
-                "attributes": {
-                    "symbol": "Equity.US.AAPL/USD",
-                    "base": "AAPL",
-                },
-            },
-            {
-                "id": "def456",
-                "attributes": {
-                    "symbol": "Equity.US.AAPL.PRE/USD",
-                    "base": "AAPL",
-                },
-            },
+        # get_pyth_feed_ids issues one HTTP call per symbol — drive each call
+        # from its own response so the test stays honest if extended to >1.
+        def make_response(payload):
+            response = MagicMock()
+            response.raise_for_status = MagicMock()
+            response.json.return_value = payload
+            return response
+
+        symbols = ["AAPL", "TSLA"]
+        responses = [
+            make_response(
+                [
+                    {
+                        "id": "abc123",
+                        "attributes": {"symbol": "Equity.US.AAPL/USD", "base": "AAPL"},
+                    },
+                    {
+                        "id": "def456",
+                        "attributes": {
+                            "symbol": "Equity.US.AAPL.PRE/USD",
+                            "base": "AAPL",
+                        },
+                    },
+                ]
+            ),
+            make_response(
+                [
+                    {
+                        "id": "tsla123",
+                        "attributes": {"symbol": "Equity.US.TSLA/USD", "base": "TSLA"},
+                    },
+                ]
+            ),
         ]
 
-        with patch("requests.get", return_value=mock_response) as mock_get:
-            feed_ids = PrimeDeltaClient.get_pyth_feed_ids(["AAPL"])
+        with patch("requests.get", side_effect=responses) as mock_get:
+            feed_ids = PrimeDeltaClient.get_pyth_feed_ids(symbols)
 
-        assert feed_ids == {"AAPL": "abc123"}
-        mock_get.assert_called_once()
+        assert feed_ids == {"AAPL": "abc123", "TSLA": "tsla123"}
+        assert mock_get.call_count == len(symbols)
 
     def test_returns_empty_dict_for_no_matching_feeds(self):
         mock_response = MagicMock()

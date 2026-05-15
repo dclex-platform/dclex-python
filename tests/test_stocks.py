@@ -1,5 +1,5 @@
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from primedelta import PrimeDelta
 from primedelta.types import Stock
