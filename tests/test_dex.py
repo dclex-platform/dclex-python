@@ -40,6 +40,8 @@ _DID_ADDRESS = "0x" + "4" * 40
 _ROUTER_ADDRESS = "0x" + "5" * 40
 _NPM_ADDRESS = "0x" + "6" * 40
 _AAPL_TOKEN = "0x" + "A" * 40
+_AMMT1_TOKEN = "0x" + "7" * 40
+_AMMT2_TOKEN = "0x" + "8" * 40
 _DCLEX_POOL = "0x" + "C" * 40
 _AMM_POOL = "0x" + "D" * 40
 
@@ -48,7 +50,12 @@ def _ref(address: str) -> ContractRef:
     return ContractRef(address=address, abi=[])
 
 
-def _contracts(*, with_router: bool = True, with_npm: bool = True) -> Contracts:
+def _contracts(
+    *,
+    with_router: bool = True,
+    with_npm: bool = True,
+    with_amm_pools: bool = False,
+) -> Contracts:
     core = CoreContracts(
         usdc=_ref(_USDC_ADDRESS),
         vault=_ref(_VAULT_ADDRESS),
@@ -57,6 +64,14 @@ def _contracts(*, with_router: bool = True, with_npm: bool = True) -> Contracts:
         dex_router=_ref(_ROUTER_ADDRESS) if with_router else None,
         position_manager=_ref(_NPM_ADDRESS) if with_npm else None,
     )
+    pools: dict[str, StockPools] = {
+        "AAPL": StockPools(symbol="AAPL", stock_token_address=_AAPL_TOKEN),
+    }
+    if with_amm_pools:
+        # Cross-dex tests need the AMM symbols pre-resolvable. The resolver
+        # fallback tests deliberately want them missing from this dict.
+        pools["AMMT1"] = StockPools(symbol="AMMT1", stock_token_address=_AMMT1_TOKEN)
+        pools["AMMT2"] = StockPools(symbol="AMMT2", stock_token_address=_AMMT2_TOKEN)
     return Contracts(
         chain_id=31337,
         core=core,
@@ -66,12 +81,7 @@ def _contracts(*, with_router: bool = True, with_npm: bool = True) -> Contracts:
             "univ3_factory": [],
             "erc20": [],
         },
-        pools={
-            "AAPL": StockPools(
-                symbol="AAPL",
-                stock_token_address=_AAPL_TOKEN,
-            ),
-        },
+        pools=pools,
     )
 
 
@@ -238,6 +248,112 @@ class TestRouterSwapHandler:
                 amount_in=Decimal("1"),
                 min_amount_out=Decimal("0"),
             )
+
+    def test_cross_dex_exact_input_approves_input_and_calls_swap_exact_input(self):
+        web3 = _make_web3_mock()
+        send_tx = MagicMock(return_value="0xTX")
+        fetcher = MagicMock(return_value=[b"\xaa", b"\xbb"])
+        handler = _RouterSwapHandler(
+            web3=web3,
+            account=_make_account(),
+            contracts_provider=lambda: _contracts(with_amm_pools=True),
+            signed_prices_fetcher=fetcher,
+            send_tx=send_tx,
+        )
+
+        tx = handler.swap_token_to_token_exact_input(
+            "AMMT1",
+            "AAPL",
+            amount_in=Decimal("3"),
+            min_amount_out=Decimal("1.5"),
+        )
+
+        assert tx == "0xTX"
+        assert send_tx.call_count == 2  # approve(input), then swap
+        fetcher.assert_called_once_with(["AMMT1", "AAPL"])
+
+        contract = web3.eth.contract.return_value
+        contract.functions.approve.assert_called_once_with(
+            _ROUTER_ADDRESS, 3 * 10**18
+        )
+        contract.functions.swapExactInput.assert_called_once_with(
+            _AMMT1_TOKEN,
+            _AAPL_TOKEN,
+            3 * 10**18,
+            int(Decimal("1.5") * 10**18),
+            1_700_000_000 + 600,
+            [b"\xaa", b"\xbb"],
+        )
+
+    def test_cross_dex_exact_output_uses_max_in_for_approval(self):
+        web3 = _make_web3_mock()
+        send_tx = MagicMock(return_value="0xTX")
+        handler = _RouterSwapHandler(
+            web3=web3,
+            account=_make_account(),
+            contracts_provider=lambda: _contracts(with_amm_pools=True),
+            signed_prices_fetcher=lambda symbols: [b"\xcc"],
+            send_tx=send_tx,
+        )
+
+        handler.swap_token_to_token_exact_output(
+            "AMMT1",
+            "AMMT2",
+            amount_out=Decimal("0.25"),
+            max_amount_in=Decimal("5"),
+        )
+
+        contract = web3.eth.contract.return_value
+        contract.functions.approve.assert_called_once_with(
+            _ROUTER_ADDRESS, 5 * 10**18
+        )
+        contract.functions.swapExactOutput.assert_called_once_with(
+            _AMMT1_TOKEN,
+            _AMMT2_TOKEN,
+            int(Decimal("0.25") * 10**18),
+            5 * 10**18,
+            1_700_000_000 + 600,
+            [b"\xcc"],
+        )
+
+    def test_cross_dex_rejects_same_input_and_output_symbol(self):
+        web3 = _make_web3_mock()
+        handler = _RouterSwapHandler(
+            web3=web3,
+            account=_make_account(),
+            contracts_provider=lambda: _contracts(),
+            signed_prices_fetcher=lambda symbols: [b""],
+            send_tx=MagicMock(),
+        )
+
+        with pytest.raises(ValueError):
+            handler.swap_token_to_token_exact_input(
+                "AAPL",
+                "AAPL",
+                amount_in=Decimal("1"),
+                min_amount_out=Decimal("0"),
+            )
+
+    def test_cross_dex_dedupes_signed_prices_fetch(self):
+        web3 = _make_web3_mock()
+        fetched: list[list[str]] = []
+
+        def fetcher(symbols):
+            fetched.append(list(symbols))
+            return [b""] * len(symbols)
+
+        handler = _RouterSwapHandler(
+            web3=web3,
+            account=_make_account(),
+            contracts_provider=lambda: _contracts(with_amm_pools=True),
+            signed_prices_fetcher=fetcher,
+            send_tx=MagicMock(return_value="0xTX"),
+        )
+
+        # If callers ever pass identical symbols (shouldn't on chain — ValueError
+        # protects them), the helper still de-dupes; verify it doesn't double-fetch.
+        handler._fetch_pyth_update_data_for(["AAPL", "AAPL", "AMMT1"])
+        assert fetched == [["AAPL", "AMMT1"]]
 
 
 class TestDclexHandlerLiquidity:

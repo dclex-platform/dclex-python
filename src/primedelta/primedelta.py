@@ -603,6 +603,50 @@ class PrimeDelta:
             symbol, side, amount_out, max_amount_in, deadline_seconds, pyth_value
         )
 
+    def swap_token_to_token_exact_input(
+        self,
+        input_symbol: str,
+        output_symbol: str,
+        amount_in: Decimal,
+        min_amount_out: Decimal,
+        deadline_seconds: int = 600,
+        pyth_value: int = 0,
+    ) -> str:
+        """Trade one non-dUSD token for another (routed through dUSD on chain).
+
+        Use for AMM↔AMM, AMM↔stock, and stock↔stock swaps. For dUSD↔token
+        swaps, use `swap_exact_input` with `SwapSide`.
+        """
+        self._require_logged_in_and_did_minted()
+        return self._router_swapper.swap_token_to_token_exact_input(
+            input_symbol,
+            output_symbol,
+            amount_in,
+            min_amount_out,
+            deadline_seconds,
+            pyth_value,
+        )
+
+    def swap_token_to_token_exact_output(
+        self,
+        input_symbol: str,
+        output_symbol: str,
+        amount_out: Decimal,
+        max_amount_in: Decimal,
+        deadline_seconds: int = 600,
+        pyth_value: int = 0,
+    ) -> str:
+        """Exact-output cross-dex swap. See `swap_token_to_token_exact_input`."""
+        self._require_logged_in_and_did_minted()
+        return self._router_swapper.swap_token_to_token_exact_output(
+            input_symbol,
+            output_symbol,
+            amount_out,
+            max_amount_in,
+            deadline_seconds,
+            pyth_value,
+        )
+
     def add_liquidity(self, params: AddLiquidityParams) -> str:
         self._require_logged_in_and_did_minted()
         return self._handler_for(params.pool_type).add_liquidity(params)

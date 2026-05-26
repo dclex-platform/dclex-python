@@ -199,6 +199,82 @@ class _RouterSwapHandler:
         msg_value = self._resolve_msg_value(contracts, update_data, pyth_value)
         return self._send_tx(tx_function, value=msg_value)
 
+    def swap_token_to_token_exact_input(
+        self,
+        input_symbol: str,
+        output_symbol: str,
+        amount_in: Decimal,
+        min_amount_out: Decimal,
+        deadline_seconds: int = 600,
+        pyth_value: int = 0,
+    ) -> str:
+        """Cross-dex swap: trade one non-dUSD token for another, routed through dUSD.
+
+        Wraps the router's `swapExactInput(inputToken, outputToken, ...)` which
+        internally does input→dUSD→output. Both legs may be either custom
+        (pricefeed) or AMM pools; the router picks per-token. Pyth update data
+        is fetched for both symbols since either side may host a custom pool.
+        """
+        if input_symbol == output_symbol:
+            raise ValueError("input_symbol and output_symbol must differ")
+        contracts = self._contracts_provider()
+        router_ref = self._require_router(contracts)
+        input_token_addr = self._require_stock_token(contracts, input_symbol)
+        output_token_addr = self._require_stock_token(contracts, output_symbol)
+
+        update_data = self._fetch_pyth_update_data_for([input_symbol, output_symbol])
+        deadline = self._now() + deadline_seconds
+        router = self._contract(router_ref)
+
+        amount_in_units = int(amount_in * _STOCK_DECIMALS)
+        min_out_units = int(min_amount_out * _STOCK_DECIMALS)
+        self._approve_stock(input_token_addr, router_ref.address, amount_in_units)
+        tx_function = router.functions.swapExactInput(
+            input_token_addr,
+            output_token_addr,
+            amount_in_units,
+            min_out_units,
+            deadline,
+            update_data,
+        )
+        msg_value = self._resolve_msg_value(contracts, update_data, pyth_value)
+        return self._send_tx(tx_function, value=msg_value)
+
+    def swap_token_to_token_exact_output(
+        self,
+        input_symbol: str,
+        output_symbol: str,
+        amount_out: Decimal,
+        max_amount_in: Decimal,
+        deadline_seconds: int = 600,
+        pyth_value: int = 0,
+    ) -> str:
+        """Cross-dex swap, exact-output variant. See `swap_token_to_token_exact_input`."""
+        if input_symbol == output_symbol:
+            raise ValueError("input_symbol and output_symbol must differ")
+        contracts = self._contracts_provider()
+        router_ref = self._require_router(contracts)
+        input_token_addr = self._require_stock_token(contracts, input_symbol)
+        output_token_addr = self._require_stock_token(contracts, output_symbol)
+
+        update_data = self._fetch_pyth_update_data_for([input_symbol, output_symbol])
+        deadline = self._now() + deadline_seconds
+        router = self._contract(router_ref)
+
+        amount_out_units = int(amount_out * _STOCK_DECIMALS)
+        max_in_units = int(max_amount_in * _STOCK_DECIMALS)
+        self._approve_stock(input_token_addr, router_ref.address, max_in_units)
+        tx_function = router.functions.swapExactOutput(
+            input_token_addr,
+            output_token_addr,
+            amount_out_units,
+            max_in_units,
+            deadline,
+            update_data,
+        )
+        msg_value = self._resolve_msg_value(contracts, update_data, pyth_value)
+        return self._send_tx(tx_function, value=msg_value)
+
     def _require_router(self, contracts: Contracts) -> ContractRef:
         if contracts.core.dex_router is None:
             raise RouterNotConfigured()
@@ -213,6 +289,17 @@ class _RouterSwapHandler:
         # backend's trusted signer. The pool's oracle verifies this signature,
         # so we cannot substitute Hermes/Pyth bytes.
         return self._signed_prices_fetcher([symbol])
+
+    def _fetch_pyth_update_data_for(self, symbols: list[str]) -> list[bytes]:
+        # Cross-dex routes may touch a custom pool on either leg; fetch signed
+        # prices for both symbols (de-duped, order preserved).
+        seen: set[str] = set()
+        unique: list[str] = []
+        for s in symbols:
+            if s not in seen:
+                seen.add(s)
+                unique.append(s)
+        return self._signed_prices_fetcher(unique)
 
     def _resolve_msg_value(
         self,
