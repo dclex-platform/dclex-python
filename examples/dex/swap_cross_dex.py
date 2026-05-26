@@ -71,4 +71,22 @@ exact_out_tx = primedelta.swap_token_to_token_exact_output(
 )
 print(f"exact-out AMMT1 → AAPL: {exact_out_tx}")
 
+# Exact-output AMM → AMM: buy exactly 0.02 AMMT2 with at most 5 AMMT1.
+exact_out_amm_to_amm_tx = primedelta.swap_token_to_token_exact_output(
+    input_symbol="AMMT1",
+    output_symbol="AMMT2",
+    amount_out=Decimal("0.02"),
+    max_amount_in=Decimal("5"),
+)
+print(f"exact-out AMMT1 → AMMT2: {exact_out_amm_to_amm_tx}")
+
+# Exact-output Stock → AMM: buy exactly 0.02 AMMT1 by spending at most 0.5 AAPL.
+exact_out_stock_to_amm_tx = primedelta.swap_token_to_token_exact_output(
+    input_symbol="AAPL",
+    output_symbol="AMMT1",
+    amount_out=Decimal("0.02"),
+    max_amount_in=Decimal("0.5"),
+)
+print(f"exact-out AAPL → AMMT1: {exact_out_stock_to_amm_tx}")
+
 primedelta.logout()

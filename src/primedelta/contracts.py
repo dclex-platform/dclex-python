@@ -21,6 +21,7 @@ class CoreContracts:
     dex_router: Optional[ContractRef] = None
     position_manager: Optional[ContractRef] = None
     oracle: Optional[ContractRef] = None
+    wdel: Optional[ContractRef] = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CoreContracts":
@@ -42,6 +43,11 @@ class CoreContracts:
             oracle=(
                 ContractRef.from_dict(data["oracle"])
                 if data.get("oracle") and data["oracle"].get("address")
+                else None
+            ),
+            wdel=(
+                ContractRef.from_dict(data["wdel"])
+                if data.get("wdel") and data["wdel"].get("address")
                 else None
             ),
         )

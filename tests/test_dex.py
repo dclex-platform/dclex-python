@@ -592,6 +592,84 @@ class TestDispatcher:
             mock_amm.assert_called_once_with(amm_params)
 
 
+_WDEL_ADDRESS = "0x" + "9" * 40
+
+
+def _contracts_with_wdel() -> Contracts:
+    base = _contracts()
+    core = CoreContracts(
+        usdc=base.core.usdc,
+        vault=base.core.vault,
+        factory=base.core.factory,
+        digital_identity=base.core.digital_identity,
+        dex_router=base.core.dex_router,
+        position_manager=base.core.position_manager,
+        oracle=base.core.oracle,
+        wdel=_ref(_WDEL_ADDRESS),
+    )
+    return Contracts(
+        chain_id=base.chain_id,
+        core=core,
+        pool_abis=base.pool_abis,
+        pools=base.pools,
+    )
+
+
+class TestNativeDel:
+    def test_wrap_del_sends_value_to_wdel_deposit(self):
+        primedelta = _make_primedelta()
+        primedelta._web3 = _make_web3_mock()
+        with patch.object(
+            primedelta, "_get_contracts", return_value=_contracts_with_wdel()
+        ), patch.object(
+            primedelta, "_build_and_send_transaction", return_value="0xWRAP"
+        ) as mock_send:
+            tx = primedelta.wrap_del(Decimal("3.5"))
+
+        assert tx == "0xWRAP"
+        # value carries 3.5 * 10**18 wei; the contract function should be `deposit`.
+        _, kwargs = mock_send.call_args
+        assert kwargs["value"] == int(Decimal("3.5") * 10**18)
+        wdel_contract = primedelta._web3.eth.contract.return_value
+        wdel_contract.functions.deposit.assert_called_once_with()
+
+    def test_unwrap_del_calls_wdel_withdraw_with_amount(self):
+        primedelta = _make_primedelta()
+        primedelta._web3 = _make_web3_mock()
+        with patch.object(
+            primedelta, "_get_contracts", return_value=_contracts_with_wdel()
+        ), patch.object(
+            primedelta, "_build_and_send_transaction", return_value="0xUNWRAP"
+        ) as mock_send:
+            tx = primedelta.unwrap_del(Decimal("2"))
+
+        assert tx == "0xUNWRAP"
+        # No msg.value for withdraw; the amount is the function arg.
+        _, kwargs = mock_send.call_args
+        assert "value" not in kwargs or kwargs.get("value") in (None, 0)
+        wdel_contract = primedelta._web3.eth.contract.return_value
+        wdel_contract.functions.withdraw.assert_called_once_with(2 * 10**18)
+
+    def test_wrap_del_raises_when_wdel_not_configured(self):
+        from primedelta import WdelNotConfigured
+
+        primedelta = _make_primedelta()
+        primedelta._web3 = _make_web3_mock()
+        # Base contracts have wdel=None.
+        with patch.object(primedelta, "_get_contracts", return_value=_contracts()):
+            with pytest.raises(WdelNotConfigured):
+                primedelta.wrap_del(Decimal("1"))
+
+    def test_unwrap_del_raises_when_wdel_not_configured(self):
+        from primedelta import WdelNotConfigured
+
+        primedelta = _make_primedelta()
+        primedelta._web3 = _make_web3_mock()
+        with patch.object(primedelta, "_get_contracts", return_value=_contracts()):
+            with pytest.raises(WdelNotConfigured):
+                primedelta.unwrap_del(Decimal("1"))
+
+
 class TestAuthGates:
     def test_swap_requires_did_minted(self):
         primedelta = _make_primedelta()

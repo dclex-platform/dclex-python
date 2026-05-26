@@ -27,6 +27,7 @@ _CORE_ABIS = {
     "dex_router": "dex_router.json",
     "position_manager": "position_manager.json",
     "oracle": "oracle.json",
+    "wdel": "wdel.json",
 }
 
 _POOL_ABIS = {
@@ -81,6 +82,11 @@ def load(network: str) -> Contracts:
         oracle=(
             _make_ref(core_cfg["oracle"], _CORE_ABIS["oracle"])
             if core_cfg.get("oracle")
+            else None
+        ),
+        wdel=(
+            _make_ref(core_cfg["wdel"], _CORE_ABIS["wdel"])
+            if core_cfg.get("wdel")
             else None
         ),
     )

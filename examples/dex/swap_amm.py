@@ -47,4 +47,15 @@ exact_out_tx = primedelta.swap_exact_output(
 )
 print(f"exact-out buy AMMT2 with dUSD: {exact_out_tx}")
 
+# Exact-output sell: receive exactly 5 dUSD by selling AMMT1, capping the AMMT1
+# spent at half of what we still hold.
+remaining_ammt1 = primedelta.get_onchain_stock_balance("AMMT1")
+exact_out_sell_tx = primedelta.swap_exact_output(
+    "AMMT1",
+    SwapSide.STOCK_TO_USDC,
+    amount_out=Decimal("5"),
+    max_amount_in=remaining_ammt1 / 2,
+)
+print(f"exact-out sell AMMT1 for dUSD: {exact_out_sell_tx}")
+
 primedelta.logout()

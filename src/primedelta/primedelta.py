@@ -63,6 +63,12 @@ class WithdrawalNotFound(Exception):
     pass
 
 
+class WdelNotConfigured(Exception):
+    """Raised when a DEL/WDEL helper is called on a network whose config has no
+    `wdel` address. Add it to `networks/<name>.json` to enable."""
+    pass
+
+
 class TransactionFailed(Exception):
     """A transaction submitted by the SDK reverted or failed to mine.
 
@@ -474,6 +480,42 @@ class PrimeDelta:
         )
         raw = token.functions.balanceOf(self._account.address).call()
         return Decimal(raw) / Decimal(10**18)
+
+    def get_native_del_balance(self) -> Decimal:
+        """Read native DEL balance from chain."""
+        raw = self._web3.eth.get_balance(self._account.address)
+        return Decimal(raw) / Decimal(10**18)
+
+    def wrap_del(self, amount: Decimal) -> str:
+        """Wrap native DEL → WDEL by sending msg.value to `WDEL.deposit()`.
+
+        The resulting WDEL is an AMM ERC20 — feed it into the regular swap
+        methods using the symbol "WDEL".
+        """
+        wdel = self._require_wdel()
+        wdel_contract = self._web3.eth.contract(
+            address=self._web3.to_checksum_address(wdel.address), abi=wdel.abi
+        )
+        return self._build_and_send_transaction(
+            wdel_contract.functions.deposit(),
+            value=int(amount * Decimal(10**18)),
+        )
+
+    def unwrap_del(self, amount: Decimal) -> str:
+        """Unwrap WDEL → native DEL via `WDEL.withdraw(amount)`."""
+        wdel = self._require_wdel()
+        wdel_contract = self._web3.eth.contract(
+            address=self._web3.to_checksum_address(wdel.address), abi=wdel.abi
+        )
+        return self._build_and_send_transaction(
+            wdel_contract.functions.withdraw(int(amount * Decimal(10**18))),
+        )
+
+    def _require_wdel(self):
+        wdel = self._get_contracts().core.wdel
+        if wdel is None:
+            raise WdelNotConfigured()
+        return wdel
 
     def portfolio(self) -> Portfolio:
         try:

@@ -45,4 +45,13 @@ exact_out_tx = primedelta.swap_exact_output(
 )
 print(f"exact-out buy: {exact_out_tx}")
 
+# Receive exactly 5 dUSD by selling AAPL, capping the AAPL spent at 1.
+exact_out_sell_tx = primedelta.swap_exact_output(
+    "AAPL",
+    SwapSide.STOCK_TO_USDC,
+    amount_out=Decimal("5"),
+    max_amount_in=Decimal("1"),
+)
+print(f"exact-out sell: {exact_out_sell_tx}")
+
 primedelta.logout()

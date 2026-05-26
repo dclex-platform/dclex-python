@@ -17,6 +17,7 @@ from .primedelta import (
     NotEnoughFunds,
     PrimeDelta,
     TransactionFailed,
+    WdelNotConfigured,
 )
 from .primedelta_client import NotLoggedIn, UserSignedMessageVerificationError
 from .types import *
