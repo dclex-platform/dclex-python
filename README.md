@@ -25,7 +25,7 @@ primedelta.login()
 # Spend 10 dUSD buying AAPL on the DEX.
 tx = primedelta.swap_exact_input(
     "AAPL",
-    SwapSide.USDC_TO_STOCK,
+    SwapSide.STABLECOIN_TO_STOCK,
     amount_in=Decimal("10"),
     min_amount_out=Decimal("0"),
 )
@@ -52,7 +52,7 @@ The router accepts dUSD on one side (`buyExact*`/`sellExact*`) or two non-dUSD t
 - [Cross-dex token ↔ token](./examples/dex/swap_cross_dex.py) — `swap_token_to_token_exact_input` / `swap_token_to_token_exact_output` for AMM↔AMM, AMM↔stock, stock↔stock
 - [Native DEL swaps](./examples/dex/swap_native.py) — `wrap_del` / `unwrap_del` plus regular swap on WDEL
 
-> The `USDC_TO_STOCK` / `STOCK_TO_USDC` sides refer to the on-chain stablecoin, displayed as **dUSD** in the app.
+> The stablecoin is **dUSD** on chain. `SwapSide.STABLECOIN_TO_STOCK` and `SwapSide.STOCK_TO_STABLECOIN` are the two single-hop directions; cross-dex swaps use the dedicated `swap_token_to_token_*` methods instead of `SwapSide`.
 
 ### Liquidity
 
