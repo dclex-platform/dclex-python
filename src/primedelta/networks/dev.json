@@ -1,7 +1,7 @@
 {
   "chain_id": 2028,
   "core": {
-    "usdc": "0x1A71DF49ea92867bda910b948Da588383a0450Ee",
+    "stablecoin": "0x1A71DF49ea92867bda910b948Da588383a0450Ee",
     "vault": "0xb0E19D426c737dAe9deE8dAeB95C6d2491882204",
     "factory": "0xb39CA4095bf1E2e617df5aD898e058A58939C50F",
     "digital_identity": "0xAb8C84125E0380736f0e1cC9f73A249c82417cA1",

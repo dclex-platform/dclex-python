@@ -293,34 +293,36 @@ class PrimeDelta:
         webbrowser.open(url)
         return url
 
-    def deposit_usdc(self, amount: Decimal) -> str:
+    def deposit_stablecoin(self, amount: Decimal) -> str:
         account_status = self._primedelta_client.get_account_status()
         if account_status not in [AccountStatus.VERIFIED, AccountStatus.DID_MINTED]:
             raise AccountNotVerified()
 
         contracts = self._get_contracts()
-        usdc_contract_address = self._web3.to_checksum_address(contracts.core.usdc.address)
-        usdc_contract = self._web3.eth.contract(
-            address=usdc_contract_address, abi=contracts.core.usdc.abi
+        stablecoin_contract_address = self._web3.to_checksum_address(
+            contracts.core.stablecoin.address
+        )
+        stablecoin_contract = self._web3.eth.contract(
+            address=stablecoin_contract_address, abi=contracts.core.stablecoin.abi
         )
         return self._build_and_send_transaction(
-            usdc_contract.functions.transfer(
+            stablecoin_contract.functions.transfer(
                 contracts.core.vault.address, int(amount * Decimal(10**6))
             )
         )
 
-    def request_usdc_withdrawal(self, amount: Decimal):
+    def request_stablecoin_withdrawal(self, amount: Decimal):
         account_status = self._primedelta_client.get_account_status()
         if account_status not in [AccountStatus.VERIFIED, AccountStatus.DID_MINTED]:
             raise AccountNotVerified()
 
         try:
-            return self._primedelta_client.request_usdc_withdrawal(amount=amount)
+            return self._primedelta_client.request_stablecoin_withdrawal(amount=amount)
         except APIError as exc:
             if exc.error_code == "INSUFFICIENT_FUNDS":
                 raise NotEnoughFunds()
 
-    def claim_usdc_withdrawal(self, withdrawal_id: int) -> str:
+    def claim_stablecoin_withdrawal(self, withdrawal_id: int) -> str:
         withdrawal = self._get_claimable_withdrawal(withdrawal_id)
         signature = self._primedelta_client.get_withdraw_signature(
             withdrawal_id=withdrawal_id,
@@ -334,7 +336,7 @@ class PrimeDelta:
         return self._build_and_send_transaction(
             vault_contract.functions.withdraw(
                 {
-                    "token": contracts.core.usdc.address,
+                    "token": contracts.core.stablecoin.address,
                     "account": contracts.core.vault.address,
                     "to": self._account.address,
                     "amount": int(withdrawal.amount * Decimal(10**6)),
@@ -438,10 +440,10 @@ class PrimeDelta:
     ) -> list[Distribution]:
         return self._primedelta_client.get_distributions(page_number, page_size)
 
-    def get_usdc_available_balance(self) -> Decimal:
+    def get_stablecoin_available_balance(self) -> Decimal:
         return self._primedelta_client.portfolio().buying_power
 
-    def get_usdc_total_balance(self) -> Decimal:
+    def get_stablecoin_total_balance(self) -> Decimal:
         return self._primedelta_client.portfolio().total_funds
 
     def get_stock_available_balance(self, symbol: str) -> Decimal:
@@ -456,11 +458,12 @@ class PrimeDelta:
                 return stock_item.total_owned
         return Decimal(0)
 
-    def get_onchain_usdc_balance(self) -> Decimal:
-        """Read USDC balance from chain (bypasses backend indexer lag)."""
-        usdc = self._get_contracts().core.usdc
+    def get_onchain_stablecoin_balance(self) -> Decimal:
+        """Read stablecoin balance from chain (bypasses backend indexer lag)."""
+        stablecoin = self._get_contracts().core.stablecoin
         token = self._web3.eth.contract(
-            address=self._web3.to_checksum_address(usdc.address), abi=usdc.abi
+            address=self._web3.to_checksum_address(stablecoin.address),
+            abi=stablecoin.abi,
         )
         raw = token.functions.balanceOf(self._account.address).call()
         return Decimal(raw) / Decimal(10**6)
@@ -624,11 +627,11 @@ class PrimeDelta:
         amount_in: Decimal,
         min_amount_out: Decimal,
         deadline_seconds: int = 600,
-        pyth_value: int = 0,
+        update_fee: int = 0,
     ) -> str:
         self._require_logged_in_and_did_minted()
         return self._router_swapper.swap_exact_input(
-            symbol, side, amount_in, min_amount_out, deadline_seconds, pyth_value
+            symbol, side, amount_in, min_amount_out, deadline_seconds, update_fee
         )
 
     def swap_exact_output(
@@ -638,11 +641,11 @@ class PrimeDelta:
         amount_out: Decimal,
         max_amount_in: Decimal,
         deadline_seconds: int = 600,
-        pyth_value: int = 0,
+        update_fee: int = 0,
     ) -> str:
         self._require_logged_in_and_did_minted()
         return self._router_swapper.swap_exact_output(
-            symbol, side, amount_out, max_amount_in, deadline_seconds, pyth_value
+            symbol, side, amount_out, max_amount_in, deadline_seconds, update_fee
         )
 
     def swap_token_to_token_exact_input(
@@ -652,7 +655,7 @@ class PrimeDelta:
         amount_in: Decimal,
         min_amount_out: Decimal,
         deadline_seconds: int = 600,
-        pyth_value: int = 0,
+        update_fee: int = 0,
     ) -> str:
         """Trade one non-dUSD token for another (routed through dUSD on chain).
 
@@ -666,7 +669,7 @@ class PrimeDelta:
             amount_in,
             min_amount_out,
             deadline_seconds,
-            pyth_value,
+            update_fee,
         )
 
     def swap_token_to_token_exact_output(
@@ -676,7 +679,7 @@ class PrimeDelta:
         amount_out: Decimal,
         max_amount_in: Decimal,
         deadline_seconds: int = 600,
-        pyth_value: int = 0,
+        update_fee: int = 0,
     ) -> str:
         """Exact-output cross-dex swap. See `swap_token_to_token_exact_input`."""
         self._require_logged_in_and_did_minted()
@@ -686,7 +689,7 @@ class PrimeDelta:
             amount_out,
             max_amount_in,
             deadline_seconds,
-            pyth_value,
+            update_fee,
         )
 
     def add_liquidity(self, params: AddLiquidityParams) -> str:

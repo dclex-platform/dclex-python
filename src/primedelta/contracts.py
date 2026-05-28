@@ -14,7 +14,7 @@ class ContractRef:
 
 @dataclass(frozen=True)
 class CoreContracts:
-    usdc: ContractRef
+    stablecoin: ContractRef
     vault: ContractRef
     factory: ContractRef
     digital_identity: ContractRef
@@ -26,7 +26,7 @@ class CoreContracts:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CoreContracts":
         return cls(
-            usdc=ContractRef.from_dict(data["usdc"]),
+            stablecoin=ContractRef.from_dict(data["stablecoin"]),
             vault=ContractRef.from_dict(data["vault"]),
             factory=ContractRef.from_dict(data["factory"]),
             digital_identity=ContractRef.from_dict(data["digitalIdentity"]),

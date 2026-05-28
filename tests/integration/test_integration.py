@@ -131,41 +131,41 @@ class TestTransfersIntegration:
 
 
 @pytest.mark.integration
-class TestUSDCLifecycle:
-    """End-to-end USDC deposit -> request withdrawal -> claim, with assertions
-    that the backend indexer + on-chain state both reflect each step.
+class TestStablecoinLifecycle:
+    """End-to-end stablecoin deposit -> request withdrawal -> claim, with
+    assertions that the backend indexer + on-chain state both reflect each step.
 
     Reproduces the scenario Copilot flagged as missing in the mock-heavy unit
     suite: real transfer round-trip with state-transition checks.
     """
 
     def test_deposit_then_claim_round_trip(self, primedelta_logged_in, provider_url):
-        amount = Decimal("1")  # 1 USDC — tiny, won't move anything meaningful
+        amount = Decimal("1")  # 1 unit — tiny, won't move anything meaningful
 
-        wallet_before = primedelta_logged_in.get_onchain_usdc_balance()
-        backend_before = primedelta_logged_in.get_usdc_total_balance()
+        wallet_before = primedelta_logged_in.get_onchain_stablecoin_balance()
+        backend_before = primedelta_logged_in.get_stablecoin_total_balance()
 
-        deposit_tx = primedelta_logged_in.deposit_usdc(amount)
+        deposit_tx = primedelta_logged_in.deposit_stablecoin(amount)
         assert deposit_tx.startswith("0x")
         wait_for_transaction(deposit_tx, provider_url)
 
-        # On-chain: wallet's USDC dropped by `amount` after the deposit mined.
-        wallet_after_deposit = primedelta_logged_in.get_onchain_usdc_balance()
+        # On-chain: wallet's stablecoin dropped by `amount` after the deposit mined.
+        wallet_after_deposit = primedelta_logged_in.get_onchain_stablecoin_balance()
         assert wallet_before - wallet_after_deposit >= amount - Decimal("0.000001"), (
-            f"wallet USDC didn't drop by {amount}: "
+            f"wallet stablecoin didn't drop by {amount}: "
             f"before={wallet_before}, after={wallet_after_deposit}"
         )
 
         # Backend: indexer eventually credits the deposit.
         wait_for_condition(
-            lambda: primedelta_logged_in.get_usdc_total_balance() >= backend_before
+            lambda: primedelta_logged_in.get_stablecoin_total_balance() >= backend_before
             + amount
             - Decimal("0.01"),
-            f"backend USDC balance to reflect +{amount} deposit",
+            f"backend stablecoin balance to reflect +{amount} deposit",
             timeout_s=60,
         )
 
-        withdrawal_id = primedelta_logged_in.request_usdc_withdrawal(amount)
+        withdrawal_id = primedelta_logged_in.request_stablecoin_withdrawal(amount)
         assert isinstance(withdrawal_id, int)
 
         # Backend marks withdrawal claimable after its worker processes it.
@@ -178,15 +178,15 @@ class TestUSDCLifecycle:
             timeout_s=120,
         )
 
-        claim_tx = primedelta_logged_in.claim_usdc_withdrawal(withdrawal_id)
+        claim_tx = primedelta_logged_in.claim_stablecoin_withdrawal(withdrawal_id)
         assert claim_tx.startswith("0x")
         wait_for_transaction(claim_tx, provider_url)
 
-        # On-chain: wallet's USDC came back (modulo tx gas in native, USDC is
-        # whole; should equal pre-deposit ± rounding).
-        wallet_after_claim = primedelta_logged_in.get_onchain_usdc_balance()
+        # On-chain: wallet's stablecoin came back (modulo tx gas in native,
+        # stablecoin is whole; should equal pre-deposit ± rounding).
+        wallet_after_claim = primedelta_logged_in.get_onchain_stablecoin_balance()
         assert wallet_after_claim >= wallet_before - Decimal("0.000001"), (
-            f"wallet USDC didn't return after claim: "
+            f"wallet stablecoin didn't return after claim: "
             f"before={wallet_before}, after_claim={wallet_after_claim}"
         )
 
@@ -205,10 +205,10 @@ class TestStockLifecycle:
         if balance >= units:
             return
         # Buy enough to cover with comfortable headroom (AAPL ~ $300, so 5
-        # USDC ~ 0.016 AAPL — for `units >= 1` we need a sizeable buy).
+        # units ~ 0.016 AAPL — for `units >= 1` we need a sizeable buy).
         primedelta_logged_in.swap_exact_input(
             self.SYMBOL,
-            SwapSide.USDC_TO_STOCK,
+            SwapSide.STABLECOIN_TO_STOCK,
             amount_in=Decimal(units * 400),  # ~price * units + slack
             min_amount_out=Decimal("0"),
         )

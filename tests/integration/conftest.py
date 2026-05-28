@@ -116,12 +116,12 @@ def wait_for_condition(predicate, message: str, timeout_s: float = 60.0, interva
 
 
 # Anvil default deployer key — has 10000 ETH on a fresh local chain.
-# Use to fund the test account with gas + USDC (USDCMock.mint is unrestricted).
+# Use to fund the test account with gas + stablecoin (USDCMock.mint is unrestricted).
 _ANVIL_DEPLOYER_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 
 
-def _fund_test_account_eth_and_usdc(test_address: str, provider_url: str) -> None:
-    """Top up the test account with ETH for gas + USDC for swaps/liquidity."""
+def _fund_test_account_eth_and_stablecoin(test_address: str, provider_url: str) -> None:
+    """Top up the test account with ETH for gas + stablecoin for swaps/liquidity."""
     w3 = Web3(Web3.HTTPProvider(provider_url))
     deployer = w3.eth.account.from_key(_ANVIL_DEPLOYER_KEY)
 
@@ -140,19 +140,19 @@ def _fund_test_account_eth_and_usdc(test_address: str, provider_url: str) -> Non
         tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
         w3.eth.wait_for_transaction_receipt(tx_hash)
 
-    # Mint USDC (6 decimals). Top up to ≥10 USDC.
+    # Mint stablecoin (6 decimals). Top up to ≥10 units.
     contracts = PrimeDelta(
         private_key=test_private_key_or_skip(),
         web3_provider_url=provider_url,
     )._get_contracts()
-    usdc = w3.eth.contract(
-        address=w3.to_checksum_address(contracts.core.usdc.address),
-        abi=contracts.core.usdc.abi,
+    stablecoin = w3.eth.contract(
+        address=w3.to_checksum_address(contracts.core.stablecoin.address),
+        abi=contracts.core.stablecoin.abi,
     )
-    usdc_balance = usdc.functions.balanceOf(test_address).call()
-    if usdc_balance < 10 * 10**6:
+    stablecoin_balance = stablecoin.functions.balanceOf(test_address).call()
+    if stablecoin_balance < 10 * 10**6:
         # USDCMock.mint(address,uint256) is public/unrestricted.
-        mint_tx = usdc.functions.mint(test_address, 1_000_000 * 10**6).build_transaction(
+        mint_tx = stablecoin.functions.mint(test_address, 1_000_000 * 10**6).build_transaction(
             {
                 "from": deployer.address,
                 "nonce": w3.eth.get_transaction_count(deployer.address),
@@ -188,7 +188,7 @@ def _wait_for_did_minted(sdk: PrimeDelta, timeout_s: float = 30.0) -> None:
 def _bootstrap_test_account(test_private_key, provider_url):
     """Ensure the test account is funded + VERIFIED + DID_MINTED on a fresh stack.
 
-    Funds ETH (from Anvil deployer) and USDC (USDCMock.mint is unrestricted),
+    Funds ETH (from Anvil deployer) and stablecoin (USDCMock.mint is unrestricted),
     then runs the verification flow against `FakeVerificationClient` and mints
     the on-chain DID NFT. Idempotent — handles the case where the DID NFT is
     already on-chain but the backend indexer hasn't caught up yet (409 from
@@ -198,7 +198,7 @@ def _bootstrap_test_account(test_private_key, provider_url):
         return  # Real fixtures will pytest.skip; nothing to bootstrap.
 
     test_address = Web3().eth.account.from_key(test_private_key).address
-    _fund_test_account_eth_and_usdc(test_address, provider_url)
+    _fund_test_account_eth_and_stablecoin(test_address, provider_url)
 
     sdk = PrimeDelta(private_key=test_private_key, web3_provider_url=provider_url)
     sdk.login()

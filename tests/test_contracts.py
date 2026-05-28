@@ -12,7 +12,10 @@ _UNIV3_POOL_ABI = [{"type": "function", "name": "swap"}]
 
 def _core_payload() -> dict:
     return {
-        "usdc": {"address": "0xUSDC", "abi": [{"type": "function", "name": "transfer"}]},
+        "stablecoin": {
+            "address": "0xSTABLECOIN",
+            "abi": [{"type": "function", "name": "transfer"}],
+        },
         "vault": {"address": "0xVAULT", "abi": [{"type": "function", "name": "withdraw"}]},
         "factory": {"address": "0xFACTORY", "abi": [{"type": "function", "name": "burnStocks"}]},
         "digitalIdentity": {"address": "0xDID", "abi": [{"type": "function", "name": "mint"}]},
@@ -60,8 +63,8 @@ class TestContractsParsing:
         contracts = Contracts.from_dict(_sample_payload())
 
         assert contracts.chain_id == 2028
-        assert contracts.core.usdc == ContractRef(
-            address="0xUSDC", abi=[{"type": "function", "name": "transfer"}]
+        assert contracts.core.stablecoin == ContractRef(
+            address="0xSTABLECOIN", abi=[{"type": "function", "name": "transfer"}]
         )
         assert contracts.core.vault.address == "0xVAULT"
         assert contracts.core.factory.address == "0xFACTORY"

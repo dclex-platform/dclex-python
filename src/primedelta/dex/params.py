@@ -10,8 +10,8 @@ class PoolType(str, Enum):
 
 
 class SwapSide(str, Enum):
-    USDC_TO_STOCK = "USDC_TO_STOCK"
-    STOCK_TO_USDC = "STOCK_TO_USDC"
+    STABLECOIN_TO_STOCK = "STABLECOIN_TO_STOCK"
+    STOCK_TO_STABLECOIN = "STOCK_TO_STABLECOIN"
 
 
 @dataclass(frozen=True)
@@ -19,7 +19,7 @@ class PriceFeedAddLiquidity:
     symbol: str
     liquidity_amount: Decimal
     max_stock_amount: Decimal
-    max_usdc_amount: Decimal
+    max_stablecoin_amount: Decimal
     pool_type: ClassVar[PoolType] = PoolType.PRICE_FEED
 
 
@@ -29,9 +29,9 @@ class AMMAddLiquidity:
     tick_lower: int
     tick_upper: int
     amount_stock_desired: Decimal
-    amount_usdc_desired: Decimal
+    amount_stablecoin_desired: Decimal
     amount_stock_min: Decimal
-    amount_usdc_min: Decimal
+    amount_stablecoin_min: Decimal
     pool_type: ClassVar[PoolType] = PoolType.AMM
 
 
@@ -47,7 +47,7 @@ class AMMRemoveLiquidity:
     position_id: int
     liquidity: int
     amount_stock_min: Decimal
-    amount_usdc_min: Decimal
+    amount_stablecoin_min: Decimal
     pool_type: ClassVar[PoolType] = PoolType.AMM
 
 

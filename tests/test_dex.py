@@ -33,7 +33,7 @@ from primedelta.types import AccountStatus
 
 
 _USER_ADDRESS = "0x" + "B" * 40
-_USDC_ADDRESS = "0x" + "1" * 40
+_STABLECOIN_ADDRESS = "0x" + "1" * 40
 _VAULT_ADDRESS = "0x" + "2" * 40
 _FACTORY_ADDRESS = "0x" + "3" * 40
 _DID_ADDRESS = "0x" + "4" * 40
@@ -57,7 +57,7 @@ def _contracts(
     with_amm_pools: bool = False,
 ) -> Contracts:
     core = CoreContracts(
-        usdc=_ref(_USDC_ADDRESS),
+        stablecoin=_ref(_STABLECOIN_ADDRESS),
         vault=_ref(_VAULT_ADDRESS),
         factory=_ref(_FACTORY_ADDRESS),
         digital_identity=_ref(_DID_ADDRESS),
@@ -99,7 +99,7 @@ def _make_account() -> MagicMock:
 
 
 class TestRouterSwapHandler:
-    def test_swap_exact_input_usdc_to_stock_approves_and_calls_buy_exact_input(self):
+    def test_swap_exact_input_stablecoin_to_stock_approves_and_calls_buy_exact_input(self):
         web3 = _make_web3_mock()
         send_tx = MagicMock(return_value="0xTX")
         pyth_data = [b"\xde\xad"]
@@ -113,7 +113,7 @@ class TestRouterSwapHandler:
 
         tx = handler.swap_exact_input(
             "AAPL",
-            SwapSide.USDC_TO_STOCK,
+            SwapSide.STABLECOIN_TO_STOCK,
             amount_in=Decimal("100"),
             min_amount_out=Decimal("0.5"),
         )
@@ -121,11 +121,11 @@ class TestRouterSwapHandler:
         assert tx == "0xTX"
         assert send_tx.call_count == 2
 
-        usdc_contract = web3.eth.contract.return_value
-        usdc_contract.functions.approve.assert_called_once_with(
+        stablecoin_contract = web3.eth.contract.return_value
+        stablecoin_contract.functions.approve.assert_called_once_with(
             _ROUTER_ADDRESS, 100 * 10**6
         )
-        usdc_contract.functions.buyExactInput.assert_called_once_with(
+        stablecoin_contract.functions.buyExactInput.assert_called_once_with(
             _AAPL_TOKEN,
             100 * 10**6,
             int(Decimal("0.5") * 10**18),
@@ -133,7 +133,7 @@ class TestRouterSwapHandler:
             pyth_data,
         )
 
-    def test_swap_exact_input_stock_to_usdc_approves_stock_and_calls_sell(self):
+    def test_swap_exact_input_stock_to_stablecoin_approves_stock_and_calls_sell(self):
         web3 = _make_web3_mock()
         send_tx = MagicMock(return_value="0xTX")
         handler = _RouterSwapHandler(
@@ -146,7 +146,7 @@ class TestRouterSwapHandler:
 
         tx = handler.swap_exact_input(
             "AAPL",
-            SwapSide.STOCK_TO_USDC,
+            SwapSide.STOCK_TO_STABLECOIN,
             amount_in=Decimal("2"),
             min_amount_out=Decimal("100"),
         )
@@ -164,7 +164,7 @@ class TestRouterSwapHandler:
             [b""],
         )
 
-    def test_swap_exact_output_usdc_to_stock_uses_max_in_for_approval(self):
+    def test_swap_exact_output_stablecoin_to_stock_uses_max_in_for_approval(self):
         web3 = _make_web3_mock()
         send_tx = MagicMock(return_value="0xTX")
         handler = _RouterSwapHandler(
@@ -177,7 +177,7 @@ class TestRouterSwapHandler:
 
         handler.swap_exact_output(
             "AAPL",
-            SwapSide.USDC_TO_STOCK,
+            SwapSide.STABLECOIN_TO_STOCK,
             amount_out=Decimal("1"),
             max_amount_in=Decimal("250"),
         )
@@ -190,7 +190,7 @@ class TestRouterSwapHandler:
             _AAPL_TOKEN, 1 * 10**18, 250 * 10**6, 1_700_000_000 + 600, [b""]
         )
 
-    def test_swap_passes_pyth_value(self):
+    def test_swap_passes_update_fee(self):
         web3 = _make_web3_mock()
         send_tx = MagicMock(return_value="0xTX")
         handler = _RouterSwapHandler(
@@ -203,10 +203,10 @@ class TestRouterSwapHandler:
 
         handler.swap_exact_input(
             "AAPL",
-            SwapSide.USDC_TO_STOCK,
+            SwapSide.STABLECOIN_TO_STOCK,
             amount_in=Decimal("100"),
             min_amount_out=Decimal("0.5"),
-            pyth_value=42,
+            update_fee=42,
         )
 
         # Last send_tx call (the swap, not the approve) carried the value kwarg
@@ -226,7 +226,7 @@ class TestRouterSwapHandler:
         with pytest.raises(RouterNotConfigured):
             handler.swap_exact_input(
                 "AAPL",
-                SwapSide.USDC_TO_STOCK,
+                SwapSide.STABLECOIN_TO_STOCK,
                 amount_in=Decimal("1"),
                 min_amount_out=Decimal("0"),
             )
@@ -244,7 +244,7 @@ class TestRouterSwapHandler:
         with pytest.raises(PoolNotFound):
             handler.swap_exact_input(
                 "UNKNOWN",
-                SwapSide.USDC_TO_STOCK,
+                SwapSide.STABLECOIN_TO_STOCK,
                 amount_in=Decimal("1"),
                 min_amount_out=Decimal("0"),
             )
@@ -379,7 +379,7 @@ class TestDclexHandlerLiquidity:
             symbol="AAPL",
             liquidity_amount=Decimal(30 * 10**18),
             max_stock_amount=Decimal("10"),
-            max_usdc_amount=Decimal("20"),
+            max_stablecoin_amount=Decimal("20"),
         )
         tx = handler.add_liquidity(params)
 
@@ -411,13 +411,13 @@ class TestDclexHandlerLiquidity:
                     symbol="AAPL",
                     liquidity_amount=Decimal(1),
                     max_stock_amount=Decimal("1000"),
-                    max_usdc_amount=Decimal("1000"),
+                    max_stablecoin_amount=Decimal("1000"),
                 )
             )
 
 
 class TestAMMHandlerLiquidity:
-    def _setup(self, *, token0=_USDC_ADDRESS, token1=_AAPL_TOKEN, fee=3000):
+    def _setup(self, *, token0=_STABLECOIN_ADDRESS, token1=_AAPL_TOKEN, fee=3000):
         web3 = _make_web3_mock()
         send_tx = MagicMock(return_value="0xTX")
         contract = MagicMock()
@@ -440,21 +440,21 @@ class TestAMMHandlerLiquidity:
 
     def test_add_liquidity_orders_tokens_correctly_when_stock_is_token1(self):
         handler, web3, contract, send_tx = self._setup(
-            token0=_USDC_ADDRESS, token1=_AAPL_TOKEN
+            token0=_STABLECOIN_ADDRESS, token1=_AAPL_TOKEN
         )
         params = AMMAddLiquidity(
             symbol="AAPL",
             tick_lower=-100,
             tick_upper=100,
             amount_stock_desired=Decimal("2"),
-            amount_usdc_desired=Decimal("400"),
+            amount_stablecoin_desired=Decimal("400"),
             amount_stock_min=Decimal("1.9"),
-            amount_usdc_min=Decimal("390"),
+            amount_stablecoin_min=Decimal("390"),
         )
         handler.add_liquidity(params)
 
         mint_args = contract.functions.mint.call_args.args[0]
-        assert mint_args["token0"] == _USDC_ADDRESS
+        assert mint_args["token0"] == _STABLECOIN_ADDRESS
         assert mint_args["token1"] == _AAPL_TOKEN
         assert mint_args["fee"] == 3000
         assert mint_args["amount0Desired"] == 400 * 10**6
@@ -465,16 +465,16 @@ class TestAMMHandlerLiquidity:
 
     def test_add_liquidity_orders_tokens_correctly_when_stock_is_token0(self):
         handler, web3, contract, send_tx = self._setup(
-            token0=_AAPL_TOKEN, token1=_USDC_ADDRESS
+            token0=_AAPL_TOKEN, token1=_STABLECOIN_ADDRESS
         )
         params = AMMAddLiquidity(
             symbol="AAPL",
             tick_lower=-100,
             tick_upper=100,
             amount_stock_desired=Decimal("2"),
-            amount_usdc_desired=Decimal("400"),
+            amount_stablecoin_desired=Decimal("400"),
             amount_stock_min=Decimal("1.9"),
-            amount_usdc_min=Decimal("390"),
+            amount_stablecoin_min=Decimal("390"),
         )
         handler.add_liquidity(params)
 
@@ -488,7 +488,7 @@ class TestAMMHandlerLiquidity:
             position_id=42,
             liquidity=10**18,
             amount_stock_min=Decimal("0"),
-            amount_usdc_min=Decimal("0"),
+            amount_stablecoin_min=Decimal("0"),
         )
         handler.remove_liquidity(params)
         contract.functions.multicall.assert_called_once()
@@ -536,11 +536,11 @@ class TestDispatcher:
             primedelta._router_swapper, "swap_exact_input", return_value="0xTX"
         ) as mock_swap:
             tx = primedelta.swap_exact_input(
-                "AAPL", SwapSide.USDC_TO_STOCK, Decimal("100"), Decimal("0.5")
+                "AAPL", SwapSide.STABLECOIN_TO_STOCK, Decimal("100"), Decimal("0.5")
             )
         assert tx == "0xTX"
         mock_swap.assert_called_once_with(
-            "AAPL", SwapSide.USDC_TO_STOCK, Decimal("100"), Decimal("0.5"), 600, 0
+            "AAPL", SwapSide.STABLECOIN_TO_STOCK, Decimal("100"), Decimal("0.5"), 600, 0
         )
 
     def test_swap_exact_output_routes_to_router_swapper(self):
@@ -553,7 +553,7 @@ class TestDispatcher:
             primedelta._router_swapper, "swap_exact_output", return_value="0xTX"
         ) as mock_swap:
             tx = primedelta.swap_exact_output(
-                "AAPL", SwapSide.STOCK_TO_USDC, Decimal("100"), Decimal("3")
+                "AAPL", SwapSide.STOCK_TO_STABLECOIN, Decimal("100"), Decimal("3")
             )
         assert tx == "0xTX"
         mock_swap.assert_called_once()
@@ -573,7 +573,7 @@ class TestDispatcher:
                 symbol="AAPL",
                 liquidity_amount=Decimal("1"),
                 max_stock_amount=Decimal("1"),
-                max_usdc_amount=Decimal("100"),
+                max_stablecoin_amount=Decimal("100"),
             )
             assert primedelta.add_liquidity(pf_params) == "0xPF"
             mock_pf.assert_called_once_with(pf_params)
@@ -584,9 +584,9 @@ class TestDispatcher:
                 tick_lower=-100,
                 tick_upper=100,
                 amount_stock_desired=Decimal("1"),
-                amount_usdc_desired=Decimal("100"),
+                amount_stablecoin_desired=Decimal("100"),
                 amount_stock_min=Decimal("0.9"),
-                amount_usdc_min=Decimal("90"),
+                amount_stablecoin_min=Decimal("90"),
             )
             assert primedelta.add_liquidity(amm_params) == "0xAMM"
             mock_amm.assert_called_once_with(amm_params)
@@ -598,7 +598,7 @@ _WDEL_ADDRESS = "0x" + "9" * 40
 def _contracts_with_wdel() -> Contracts:
     base = _contracts()
     core = CoreContracts(
-        usdc=base.core.usdc,
+        stablecoin=base.core.stablecoin,
         vault=base.core.vault,
         factory=base.core.factory,
         digital_identity=base.core.digital_identity,
@@ -680,7 +680,7 @@ class TestAuthGates:
         ):
             with pytest.raises(AccountNotVerified):
                 primedelta.swap_exact_input(
-                    "AAPL", SwapSide.USDC_TO_STOCK, Decimal("1"), Decimal("0")
+                    "AAPL", SwapSide.STABLECOIN_TO_STOCK, Decimal("1"), Decimal("0")
                 )
 
     def test_add_liquidity_requires_did_minted(self):
@@ -696,7 +696,7 @@ class TestAuthGates:
                         symbol="AAPL",
                         liquidity_amount=Decimal("1"),
                         max_stock_amount=Decimal("1"),
-                        max_usdc_amount=Decimal("100"),
+                        max_stablecoin_amount=Decimal("100"),
                     )
                 )
 

@@ -18,10 +18,10 @@ primedelta = PrimeDelta(
 )
 primedelta.login()
 
-# Acquire some TSLA so we have stock to pair with USDC for LP.
+# Acquire some TSLA so we have stock to pair with the stablecoin for LP.
 buy_tx = primedelta.swap_exact_input(
     "TSLA",
-    SwapSide.USDC_TO_STOCK,
+    SwapSide.STABLECOIN_TO_STOCK,
     amount_in=Decimal("30"),
     min_amount_out=Decimal("0"),
 )
@@ -40,12 +40,12 @@ add_tx = primedelta.add_liquidity(
         symbol="TSLA",
         liquidity_amount=liquidity_amount,
         max_stock_amount=Decimal("0.5"),
-        max_usdc_amount=Decimal("250"),
+        max_stablecoin_amount=Decimal("250"),
     )
 )
 print(f"add:    {add_tx}")
 
-# Burn the LP shares back to underlying stock + USDC.
+# Burn the LP shares back to underlying stock + stablecoin.
 remove_tx = primedelta.remove_liquidity(
     PriceFeedRemoveLiquidity(
         symbol="TSLA",

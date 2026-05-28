@@ -199,7 +199,9 @@ class PrimeDeltaClient:
             nonce=response["nonce"],
         )
 
-    def request_usdc_withdrawal(self, amount: Decimal) -> int:
+    def request_stablecoin_withdrawal(self, amount: Decimal) -> int:
+        # Backend endpoint name remains "/initialize-usdc-withdraw/" until the
+        # backend renames it; the Python method is the SDK's surface.
         response = self._authorized_post(
             "/initialize-usdc-withdraw/", {"amount": str(amount)}
         )

@@ -13,8 +13,8 @@ primedelta = PrimeDelta(
 primedelta.login()
 
 portfolio = primedelta.portfolio()
-usdc_available_balance = primedelta.get_usdc_available_balance()
-usdc_total_balance = primedelta.get_usdc_total_balance()
+stablecoin_available_balance = primedelta.get_stablecoin_available_balance()
+stablecoin_total_balance = primedelta.get_stablecoin_total_balance()
 aapl_available_balance = primedelta.get_stock_available_balance("AAPL")
 aapl_total_balance = primedelta.get_stock_total_balance("AAPL")
 

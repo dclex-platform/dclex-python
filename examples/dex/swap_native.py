@@ -75,7 +75,7 @@ print(f"WDEL → DEL (unwrap): {unwrap_tx}")
 primedelta.wrap_del(Decimal("0.5"))
 del_to_dusd_tx = primedelta.swap_exact_input(
     "WDEL",
-    SwapSide.STOCK_TO_USDC,
+    SwapSide.STOCK_TO_STABLECOIN,
     amount_in=primedelta.get_onchain_stock_balance("WDEL"),
     min_amount_out=Decimal("0"),
 )
@@ -83,7 +83,7 @@ print(f"DEL → dUSD: {del_to_dusd_tx}")
 
 dusd_to_del_tx = primedelta.swap_exact_input(
     "WDEL",
-    SwapSide.USDC_TO_STOCK,
+    SwapSide.STABLECOIN_TO_STOCK,
     amount_in=Decimal("1"),
     min_amount_out=Decimal("0"),
 )

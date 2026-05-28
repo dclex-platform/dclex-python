@@ -20,7 +20,7 @@ _NETWORKS_DIR = Path(__file__).parent
 _ABIS_DIR = _NETWORKS_DIR / "abis"
 
 _CORE_ABIS = {
-    "usdc": "usdc.json",
+    "stablecoin": "stablecoin.json",
     "vault": "vault.json",
     "factory": "factory.json",
     "digital_identity": "digital_identity.json",
@@ -63,7 +63,7 @@ def load(network: str) -> Contracts:
 
     position_manager_addr = core_cfg.get("position_manager") or None
     core = CoreContracts(
-        usdc=_make_ref(core_cfg["usdc"], _CORE_ABIS["usdc"]),
+        stablecoin=_make_ref(core_cfg["stablecoin"], _CORE_ABIS["stablecoin"]),
         vault=_make_ref(core_cfg["vault"], _CORE_ABIS["vault"]),
         factory=_make_ref(core_cfg["factory"], _CORE_ABIS["factory"]),
         digital_identity=_make_ref(

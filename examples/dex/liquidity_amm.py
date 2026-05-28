@@ -21,7 +21,7 @@ primedelta.login()
 # AMMT1 is an AMM-only token; users acquire it via swap before LPing.
 buy_tx = primedelta.swap_exact_input(
     "AMMT1",
-    SwapSide.USDC_TO_STOCK,
+    SwapSide.STABLECOIN_TO_STOCK,
     amount_in=Decimal("20"),
     min_amount_out=Decimal("0"),
 )
@@ -38,9 +38,9 @@ add_tx = primedelta.add_liquidity(
         tick_lower=-887220,
         tick_upper=887220,
         amount_stock_desired=ammt1_balance / 2,
-        amount_usdc_desired=Decimal("10"),
+        amount_stablecoin_desired=Decimal("10"),
         amount_stock_min=Decimal("0"),
-        amount_usdc_min=Decimal("0"),
+        amount_stablecoin_min=Decimal("0"),
     )
 )
 print(f"add:    {add_tx}")
@@ -57,7 +57,7 @@ remove_tx = primedelta.remove_liquidity(
         position_id=position_id,
         liquidity=info.liquidity,
         amount_stock_min=Decimal("0"),
-        amount_usdc_min=Decimal("0"),
+        amount_stablecoin_min=Decimal("0"),
     )
 )
 print(f"remove: {remove_tx}")

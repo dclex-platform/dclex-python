@@ -20,7 +20,7 @@ primedelta.login()
 # Buy AMMT1 with 10 dUSD.
 buy_tx = primedelta.swap_exact_input(
     "AMMT1",
-    SwapSide.USDC_TO_STOCK,
+    SwapSide.STABLECOIN_TO_STOCK,
     amount_in=Decimal("10"),
     min_amount_out=Decimal("0"),
 )
@@ -32,7 +32,7 @@ print(f"AMMT1 on chain: {ammt1_received}")
 # Sell half of the AMMT1 we just bought back to dUSD.
 sell_tx = primedelta.swap_exact_input(
     "AMMT1",
-    SwapSide.STOCK_TO_USDC,
+    SwapSide.STOCK_TO_STABLECOIN,
     amount_in=ammt1_received / 2,
     min_amount_out=Decimal("0"),
 )
@@ -41,7 +41,7 @@ print(f"sell AMMT1 for dUSD: {sell_tx}")
 # Exact-output: buy exactly 0.05 AMMT2, capping spend at 25 dUSD.
 exact_out_tx = primedelta.swap_exact_output(
     "AMMT2",
-    SwapSide.USDC_TO_STOCK,
+    SwapSide.STABLECOIN_TO_STOCK,
     amount_out=Decimal("0.05"),
     max_amount_in=Decimal("25"),
 )
@@ -52,7 +52,7 @@ print(f"exact-out buy AMMT2 with dUSD: {exact_out_tx}")
 remaining_ammt1 = primedelta.get_onchain_stock_balance("AMMT1")
 exact_out_sell_tx = primedelta.swap_exact_output(
     "AMMT1",
-    SwapSide.STOCK_TO_USDC,
+    SwapSide.STOCK_TO_STABLECOIN,
     amount_out=Decimal("5"),
     max_amount_in=remaining_ammt1 / 2,
 )

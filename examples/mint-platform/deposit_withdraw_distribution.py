@@ -13,9 +13,9 @@ primedelta = PrimeDelta(
 )
 primedelta.login()
 
-deposit_usdc_tx_hash = primedelta.deposit_usdc(Decimal(100))
-usdc_withdrawal_id = primedelta.request_usdc_withdrawal(Decimal(100))
-withdraw_usdc_tx_hash = primedelta.claim_usdc_withdrawal(usdc_withdrawal_id)
+deposit_stablecoin_tx_hash = primedelta.deposit_stablecoin(Decimal(100))
+stablecoin_withdrawal_id = primedelta.request_stablecoin_withdrawal(Decimal(100))
+withdraw_stablecoin_tx_hash = primedelta.claim_stablecoin_withdrawal(stablecoin_withdrawal_id)
 deposit_aapl_tx_hash = primedelta.deposit_stock_token("AAPL", 10)
 stock_withdrawal_id = primedelta.request_stock_withdrawal("AAPL", 10)
 withdraw_aapl_tx_hash = primedelta.claim_stock_withdrawal(1)

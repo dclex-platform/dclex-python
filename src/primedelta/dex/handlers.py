@@ -13,7 +13,7 @@ from primedelta.dex.params import (
 )
 
 
-_USDC_DECIMALS = Decimal(10**6)
+_STABLECOIN_DECIMALS = Decimal(10**6)
 _STOCK_DECIMALS = Decimal(10**18)
 
 # DEFAULT_FEE_TIER from DclexRouter.sol — the AMM pools are created with this.
@@ -122,7 +122,7 @@ class _RouterSwapHandler:
         amount_in: Decimal,
         min_amount_out: Decimal,
         deadline_seconds: int = 600,
-        pyth_value: int = 0,
+        update_fee: int = 0,
     ) -> str:
         contracts = self._contracts_provider()
         router_ref = self._require_router(contracts)
@@ -132,10 +132,10 @@ class _RouterSwapHandler:
         deadline = self._now() + deadline_seconds
         router = self._contract(router_ref)
 
-        if side == SwapSide.USDC_TO_STOCK:
-            amount_in_units = int(amount_in * _USDC_DECIMALS)
+        if side == SwapSide.STABLECOIN_TO_STOCK:
+            amount_in_units = int(amount_in * _STABLECOIN_DECIMALS)
             min_out_units = int(min_amount_out * _STOCK_DECIMALS)
-            self._approve(contracts.core.usdc, router_ref.address, amount_in_units)
+            self._approve(contracts.core.stablecoin, router_ref.address, amount_in_units)
             tx_function = router.functions.buyExactInput(
                 stock_token_addr,
                 amount_in_units,
@@ -145,7 +145,7 @@ class _RouterSwapHandler:
             )
         else:
             amount_in_units = int(amount_in * _STOCK_DECIMALS)
-            min_out_units = int(min_amount_out * _USDC_DECIMALS)
+            min_out_units = int(min_amount_out * _STABLECOIN_DECIMALS)
             self._approve_stock(stock_token_addr, router_ref.address, amount_in_units)
             tx_function = router.functions.sellExactInput(
                 stock_token_addr,
@@ -154,7 +154,7 @@ class _RouterSwapHandler:
                 deadline,
                 update_data,
             )
-        msg_value = self._resolve_msg_value(contracts, update_data, pyth_value)
+        msg_value = self._resolve_msg_value(contracts, update_data, update_fee)
         return self._send_tx(tx_function, value=msg_value)
 
     def swap_exact_output(
@@ -164,7 +164,7 @@ class _RouterSwapHandler:
         amount_out: Decimal,
         max_amount_in: Decimal,
         deadline_seconds: int = 600,
-        pyth_value: int = 0,
+        update_fee: int = 0,
     ) -> str:
         contracts = self._contracts_provider()
         router_ref = self._require_router(contracts)
@@ -174,10 +174,10 @@ class _RouterSwapHandler:
         deadline = self._now() + deadline_seconds
         router = self._contract(router_ref)
 
-        if side == SwapSide.USDC_TO_STOCK:
+        if side == SwapSide.STABLECOIN_TO_STOCK:
             amount_out_units = int(amount_out * _STOCK_DECIMALS)
-            max_in_units = int(max_amount_in * _USDC_DECIMALS)
-            self._approve(contracts.core.usdc, router_ref.address, max_in_units)
+            max_in_units = int(max_amount_in * _STABLECOIN_DECIMALS)
+            self._approve(contracts.core.stablecoin, router_ref.address, max_in_units)
             tx_function = router.functions.buyExactOutput(
                 stock_token_addr,
                 amount_out_units,
@@ -186,7 +186,7 @@ class _RouterSwapHandler:
                 update_data,
             )
         else:
-            amount_out_units = int(amount_out * _USDC_DECIMALS)
+            amount_out_units = int(amount_out * _STABLECOIN_DECIMALS)
             max_in_units = int(max_amount_in * _STOCK_DECIMALS)
             self._approve_stock(stock_token_addr, router_ref.address, max_in_units)
             tx_function = router.functions.sellExactOutput(
@@ -196,7 +196,7 @@ class _RouterSwapHandler:
                 deadline,
                 update_data,
             )
-        msg_value = self._resolve_msg_value(contracts, update_data, pyth_value)
+        msg_value = self._resolve_msg_value(contracts, update_data, update_fee)
         return self._send_tx(tx_function, value=msg_value)
 
     def swap_token_to_token_exact_input(
@@ -206,7 +206,7 @@ class _RouterSwapHandler:
         amount_in: Decimal,
         min_amount_out: Decimal,
         deadline_seconds: int = 600,
-        pyth_value: int = 0,
+        update_fee: int = 0,
     ) -> str:
         """Cross-dex swap: trade one non-dUSD token for another, routed through dUSD.
 
@@ -237,7 +237,7 @@ class _RouterSwapHandler:
             deadline,
             update_data,
         )
-        msg_value = self._resolve_msg_value(contracts, update_data, pyth_value)
+        msg_value = self._resolve_msg_value(contracts, update_data, update_fee)
         return self._send_tx(tx_function, value=msg_value)
 
     def swap_token_to_token_exact_output(
@@ -247,7 +247,7 @@ class _RouterSwapHandler:
         amount_out: Decimal,
         max_amount_in: Decimal,
         deadline_seconds: int = 600,
-        pyth_value: int = 0,
+        update_fee: int = 0,
     ) -> str:
         """Cross-dex swap, exact-output variant. See `swap_token_to_token_exact_input`."""
         if input_symbol == output_symbol:
@@ -272,7 +272,7 @@ class _RouterSwapHandler:
             deadline,
             update_data,
         )
-        msg_value = self._resolve_msg_value(contracts, update_data, pyth_value)
+        msg_value = self._resolve_msg_value(contracts, update_data, update_fee)
         return self._send_tx(tx_function, value=msg_value)
 
     def _require_router(self, contracts: Contracts) -> ContractRef:
@@ -375,12 +375,12 @@ class _DclexPoolHandler:
 
         liquidity_units = int(params.liquidity_amount)
         max_stock_units = int(params.max_stock_amount * _STOCK_DECIMALS)
-        max_usdc_units = int(params.max_usdc_amount * _USDC_DECIMALS)
+        max_stablecoin_units = int(params.max_stablecoin_amount * _STABLECOIN_DECIMALS)
 
         # Approve user-specified caps; pool takes proportional amount and reverts
         # if it would exceed allowance (chain-enforced slippage bound).
         self._approve_at(stock_token_addr, pool_address, max_stock_units)
-        self._approve(contracts.core.usdc, pool_address, max_usdc_units)
+        self._approve(contracts.core.stablecoin, pool_address, max_stablecoin_units)
         return self._send_tx(pool.functions.addLiquidity(liquidity_units))
 
     def remove_liquidity(self, params: PriceFeedRemoveLiquidity) -> str:
@@ -467,13 +467,13 @@ class _AMMPoolHandler:
             stock_token_addr,
             token0,
             stock=params.amount_stock_desired,
-            usdc=params.amount_usdc_desired,
+            stablecoin=params.amount_stablecoin_desired,
         )
         amounts_min = self._map_amounts(
             stock_token_addr,
             token0,
             stock=params.amount_stock_min,
-            usdc=params.amount_usdc_min,
+            stablecoin=params.amount_stablecoin_min,
         )
 
         npm = self._contract(npm_ref)
@@ -506,7 +506,7 @@ class _AMMPoolHandler:
         deadline = self._now() + 600
 
         amount_stock_min_units = int(params.amount_stock_min * _STOCK_DECIMALS)
-        amount_usdc_min_units = int(params.amount_usdc_min * _USDC_DECIMALS)
+        amount_stablecoin_min_units = int(params.amount_stablecoin_min * _STABLECOIN_DECIMALS)
 
         max_uint128 = (1 << 128) - 1
         decrease_call = npm.encodeABI(
@@ -516,7 +516,7 @@ class _AMMPoolHandler:
                     params.position_id,
                     params.liquidity,
                     amount_stock_min_units,
-                    amount_usdc_min_units,
+                    amount_stablecoin_min_units,
                     deadline,
                 )
             ],
@@ -568,7 +568,7 @@ class _AMMPoolHandler:
     ) -> str:
         # The router's `stockToAMMPool` getter isn't always exposed in deployed
         # bytecode (older versions). Going through the NPM's V3 factory works
-        # uniformly: NPM.factory().getPool(stock, USDC, DEFAULT_FEE_TIER).
+        # uniformly: NPM.factory().getPool(stock, stablecoin, DEFAULT_FEE_TIER).
         npm = self._contract(npm_ref)
         v3_factory_addr = _call_view(
             "NonfungiblePositionManager.factory",
@@ -582,7 +582,7 @@ class _AMMPoolHandler:
             "UniswapV3Factory.getPool",
             lambda: v3_factory.functions.getPool(
                 self._web3.to_checksum_address(stock_token_addr),
-                self._web3.to_checksum_address(contracts.core.usdc.address),
+                self._web3.to_checksum_address(contracts.core.stablecoin.address),
                 _AMM_FEE_TIER,
             ).call(),
         )
@@ -606,13 +606,13 @@ class _AMMPoolHandler:
         )
 
     def _map_amounts(
-        self, stock_token_addr: str, token0: str, *, stock: Decimal, usdc: Decimal
+        self, stock_token_addr: str, token0: str, *, stock: Decimal, stablecoin: Decimal
     ) -> tuple[int, int]:
         stock_units = int(stock * _STOCK_DECIMALS)
-        usdc_units = int(usdc * _USDC_DECIMALS)
+        stablecoin_units = int(stablecoin * _STABLECOIN_DECIMALS)
         if token0.lower() == stock_token_addr.lower():
-            return (stock_units, usdc_units)
-        return (usdc_units, stock_units)
+            return (stock_units, stablecoin_units)
+        return (stablecoin_units, stock_units)
 
     def _now(self) -> int:
         return int(self._web3.eth.get_block("latest")["timestamp"])

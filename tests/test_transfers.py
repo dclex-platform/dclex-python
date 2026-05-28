@@ -17,8 +17,8 @@ from primedelta.types import (
 )
 
 
-class TestDepositUSDC:
-    def test_deposit_usdc_raises_when_user_is_not_verified(self):
+class TestDepositStablecoin:
+    def test_deposit_stablecoin_raises_when_user_is_not_verified(self):
         with patch("primedelta.primedelta.Web3"):
             primedelta = PrimeDelta(
                 private_key="0x" + "1" * 64,
@@ -31,11 +31,11 @@ class TestDepositUSDC:
             return_value=AccountStatus.NOT_VERIFIED,
         ):
             with pytest.raises(AccountNotVerified):
-                primedelta.deposit_usdc(Decimal("100"))
+                primedelta.deposit_stablecoin(Decimal("100"))
 
 
-class TestWithdrawUSDC:
-    def test_request_usdc_withdrawal(self):
+class TestWithdrawStablecoin:
+    def test_request_stablecoin_withdrawal(self):
         with patch("primedelta.primedelta.Web3"):
             primedelta = PrimeDelta(
                 private_key="0x" + "1" * 64,
@@ -49,15 +49,15 @@ class TestWithdrawUSDC:
         ):
             with patch.object(
                 primedelta._primedelta_client,
-                "request_usdc_withdrawal",
+                "request_stablecoin_withdrawal",
                 return_value=123,
             ) as mock_request:
-                withdrawal_id = primedelta.request_usdc_withdrawal(Decimal("100"))
+                withdrawal_id = primedelta.request_stablecoin_withdrawal(Decimal("100"))
 
         assert withdrawal_id == 123
         mock_request.assert_called_once_with(amount=Decimal("100"))
 
-    def test_request_usdc_withdrawal_raises_when_user_is_not_verified(self):
+    def test_request_stablecoin_withdrawal_raises_when_user_is_not_verified(self):
         with patch("primedelta.primedelta.Web3"):
             primedelta = PrimeDelta(
                 private_key="0x" + "1" * 64,
@@ -70,9 +70,9 @@ class TestWithdrawUSDC:
             return_value=AccountStatus.NOT_VERIFIED,
         ):
             with pytest.raises(AccountNotVerified):
-                primedelta.request_usdc_withdrawal(Decimal("100"))
+                primedelta.request_stablecoin_withdrawal(Decimal("100"))
 
-    def test_request_usdc_withdrawal_raises_when_not_enough_funds(self):
+    def test_request_stablecoin_withdrawal_raises_when_not_enough_funds(self):
         with patch("primedelta.primedelta.Web3"):
             primedelta = PrimeDelta(
                 private_key="0x" + "1" * 64,
@@ -86,13 +86,13 @@ class TestWithdrawUSDC:
         ):
             with patch.object(
                 primedelta._primedelta_client,
-                "request_usdc_withdrawal",
+                "request_stablecoin_withdrawal",
                 side_effect=APIError("INSUFFICIENT_FUNDS"),
             ):
                 with pytest.raises(NotEnoughFunds):
-                    primedelta.request_usdc_withdrawal(Decimal("10000"))
+                    primedelta.request_stablecoin_withdrawal(Decimal("10000"))
 
-    def test_claim_usdc_withdrawal_raises_when_not_found(self):
+    def test_claim_stablecoin_withdrawal_raises_when_not_found(self):
         with patch("primedelta.primedelta.Web3"):
             primedelta = PrimeDelta(
                 private_key="0x" + "1" * 64,
@@ -105,7 +105,7 @@ class TestWithdrawUSDC:
             return_value=[],
         ):
             with pytest.raises(WithdrawalNotFound):
-                primedelta.claim_usdc_withdrawal(9999)
+                primedelta.claim_stablecoin_withdrawal(9999)
 
 
 class TestDepositStock:

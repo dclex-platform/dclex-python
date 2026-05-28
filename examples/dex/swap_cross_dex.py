@@ -21,13 +21,13 @@ primedelta.login()
 # to spend.
 primedelta.swap_exact_input(
     "AMMT1",
-    SwapSide.USDC_TO_STOCK,
+    SwapSide.STABLECOIN_TO_STOCK,
     amount_in=Decimal("20"),
     min_amount_out=Decimal("0"),
 )
 primedelta.swap_exact_input(
     "AAPL",
-    SwapSide.USDC_TO_STOCK,
+    SwapSide.STABLECOIN_TO_STOCK,
     amount_in=Decimal("20"),
     min_amount_out=Decimal("0"),
 )

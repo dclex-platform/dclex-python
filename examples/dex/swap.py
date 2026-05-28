@@ -13,11 +13,11 @@ primedelta = PrimeDelta(
 )
 primedelta.login()
 
-# Spend 10 USDC of buying power on AAPL. The actual amount received depends on
+# Spend 10 dUSD of buying power on AAPL. The actual amount received depends on
 # the current pool price, so we don't know it ahead of time.
 buy_tx = primedelta.swap_exact_input(
     "AAPL",
-    SwapSide.USDC_TO_STOCK,
+    SwapSide.STABLECOIN_TO_STOCK,
     amount_in=Decimal("10"),
     min_amount_out=Decimal("0"),
 )
@@ -30,16 +30,16 @@ print(f"AAPL on chain: {aapl_received}")
 # Sell half of what we just bought.
 sell_tx = primedelta.swap_exact_input(
     "AAPL",
-    SwapSide.STOCK_TO_USDC,
+    SwapSide.STOCK_TO_STABLECOIN,
     amount_in=aapl_received / 2,
     min_amount_out=Decimal("0"),
 )
 print(f"sell: {sell_tx}")
 
-# Buy exactly 0.01 AAPL, capping spend at 10 USDC.
+# Buy exactly 0.01 AAPL, capping spend at 10 dUSD.
 exact_out_tx = primedelta.swap_exact_output(
     "AAPL",
-    SwapSide.USDC_TO_STOCK,
+    SwapSide.STABLECOIN_TO_STOCK,
     amount_out=Decimal("0.01"),
     max_amount_in=Decimal("10"),
 )
@@ -48,7 +48,7 @@ print(f"exact-out buy: {exact_out_tx}")
 # Receive exactly 5 dUSD by selling AAPL, capping the AAPL spent at 1.
 exact_out_sell_tx = primedelta.swap_exact_output(
     "AAPL",
-    SwapSide.STOCK_TO_USDC,
+    SwapSide.STOCK_TO_STABLECOIN,
     amount_out=Decimal("5"),
     max_amount_in=Decimal("1"),
 )
